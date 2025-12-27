@@ -382,7 +382,7 @@ export function UserPageClient({ username }: UserPageClientProps) {
 
           <TabsContent value="tracking" className="m-0 space-y-8 outline-none">
             {/* Quick Stats Summary */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            {/* <div className="grid grid-cols-1 md:grid-cols-3 gap-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
               <Card className="border-none bg-gradient-to-br from-red-500/10 to-transparent shadow-none ring-1 ring-red-500/20">
                 <CardContent className="p-6 flex items-center justify-between">
                   <div className="space-y-1">
@@ -428,7 +428,7 @@ export function UserPageClient({ username }: UserPageClientProps) {
                   </div>
                 </CardContent>
               </Card>
-            </div>
+            </div> */}
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
               {/* Lost Followers Card - Ultra Premium */}
