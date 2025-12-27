@@ -1,4 +1,9 @@
-import { GitHubUser, GitHubAPIClient as IGitHubAPIClient } from './types';
+import {
+  GitHubUser,
+  GitHubUserSummary,
+  GitHubAPIClient as IGitHubAPIClient,
+  UserStats,
+} from "./types";
 
 /**
  * Custom error class for GitHub API errors
@@ -10,7 +15,7 @@ export class GitHubAPIError extends Error {
     public code?: string
   ) {
     super(message);
-    this.name = 'GitHubAPIError';
+    this.name = "GitHubAPIError";
   }
 }
 
@@ -18,57 +23,52 @@ export class GitHubAPIError extends Error {
  * GitHub API client for fetching user data
  */
 export class GitHubAPIClient implements IGitHubAPIClient {
-  private readonly baseUrl = 'https://api.github.com';
+  private readonly baseUrl = "https://api.github.com";
   private readonly timeout = 10000; // 10 seconds
 
-  /**
-   * Fetch follower count for a GitHub user
-   */
-  async fetchUserFollowers(username: string): Promise<GitHubUser> {
+  private async request<T>(
+    endpoint: string,
+    options: RequestInit = {}
+  ): Promise<T> {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), this.timeout);
 
     try {
-      const response = await fetch(`${this.baseUrl}/users/${username}`, {
+      const response = await fetch(`${this.baseUrl}${endpoint}`, {
+        ...options,
         headers: {
-          'User-Agent': 'GitHub-Follower-Tracker',
-          'Accept': 'application/vnd.github.v3+json',
+          "User-Agent": "gitstuff",
+          Accept: "application/vnd.github.v3+json",
+          ...options.headers,
         },
         signal: controller.signal,
       });
 
       clearTimeout(timeoutId);
 
-      // Handle different HTTP status codes
       if (response.status === 404) {
-        throw new GitHubAPIError(
-          `GitHub user '${username}' not found`,
-          404,
-          'NOT_FOUND'
-        );
+        throw new GitHubAPIError("Not found", 404, "NOT_FOUND");
       }
 
       if (response.status === 403) {
-        const rateLimitRemaining = response.headers.get('X-RateLimit-Remaining');
-        if (rateLimitRemaining === '0') {
+        const rateLimitRemaining = response.headers.get(
+          "X-RateLimit-Remaining"
+        );
+        if (rateLimitRemaining === "0") {
           throw new GitHubAPIError(
-            'GitHub API rate limit exceeded. Please try again later.',
+            "GitHub API rate limit exceeded. Please try again later.",
             403,
-            'RATE_LIMIT'
+            "RATE_LIMIT"
           );
         }
-        throw new GitHubAPIError(
-          'Access forbidden',
-          403,
-          'NETWORK_ERROR'
-        );
+        throw new GitHubAPIError("Access forbidden", 403, "NETWORK_ERROR");
       }
 
       if (response.status >= 500) {
         throw new GitHubAPIError(
-          'GitHub is experiencing issues. Please try again later.',
+          "GitHub is experiencing issues. Please try again later.",
           response.status,
-          'NETWORK_ERROR'
+          "NETWORK_ERROR"
         );
       }
 
@@ -76,55 +76,72 @@ export class GitHubAPIClient implements IGitHubAPIClient {
         throw new GitHubAPIError(
           `GitHub API error: ${response.statusText}`,
           response.status,
-          'NETWORK_ERROR'
+          "NETWORK_ERROR"
         );
       }
 
-      const data = await response.json();
-
-      // Validate response structure
-      if (
-        typeof data.login !== 'string' ||
-        typeof data.followers !== 'number' ||
-        typeof data.avatar_url !== 'string'
-      ) {
-        throw new GitHubAPIError(
-          'Invalid response format from GitHub API',
-          undefined,
-          'NETWORK_ERROR'
-        );
-      }
-
-      return {
-        login: data.login,
-        followers: data.followers,
-        avatar_url: data.avatar_url,
-        name: data.name || null,
-      };
+      return await response.json();
     } catch (error) {
       clearTimeout(timeoutId);
-
-      // Re-throw GitHubAPIError as-is
-      if (error instanceof GitHubAPIError) {
-        throw error;
+      if (error instanceof GitHubAPIError) throw error;
+      if (error instanceof Error && error.name === "AbortError") {
+        throw new GitHubAPIError("Request timeout", undefined, "NETWORK_ERROR");
       }
-
-      // Handle abort/timeout
-      if (error instanceof Error && error.name === 'AbortError') {
-        throw new GitHubAPIError(
-          'Request timeout. Please try again.',
-          undefined,
-          'NETWORK_ERROR'
-        );
-      }
-
-      // Handle network errors
       throw new GitHubAPIError(
-        'Failed to connect to GitHub. Please check your connection.',
+        "Failed to connect to GitHub",
         undefined,
-        'NETWORK_ERROR'
+        "NETWORK_ERROR"
       );
     }
+  }
+
+  async fetchUser(username: string): Promise<GitHubUser> {
+    const data = await this.request<Record<string, unknown>>(
+      `/users/${username}`
+    );
+    return {
+      login: data.login as string,
+      followers: data.followers as number,
+      following: data.following as number,
+      avatar_url: data.avatar_url as string,
+      name: (data.name as string) || null,
+      bio: (data.bio as string) || null,
+      html_url: data.html_url as string,
+      public_repos: data.public_repos as number,
+    };
+  }
+
+  async fetchFollowers(
+    username: string,
+    page = 1
+  ): Promise<GitHubUserSummary[]> {
+    const data = await this.request<Record<string, unknown>[]>(
+      `/users/${username}/followers?per_page=100&page=${page}`
+    );
+    return data.map((item) => ({
+      login: item.login as string,
+      avatar_url: item.avatar_url as string,
+      html_url: item.html_url as string,
+    }));
+  }
+
+  async fetchFollowing(
+    username: string,
+    page = 1
+  ): Promise<GitHubUserSummary[]> {
+    const data = await this.request<Record<string, unknown>[]>(
+      `/users/${username}/following?per_page=100&page=${page}`
+    );
+    return data.map((item) => ({
+      login: item.login as string,
+      avatar_url: item.avatar_url as string,
+      html_url: item.html_url as string,
+    }));
+  }
+
+  // Legacy support for older interface if needed
+  async fetchUserFollowers(username: string): Promise<UserStats> {
+    return this.fetchUser(username) as unknown as UserStats;
   }
 }
 

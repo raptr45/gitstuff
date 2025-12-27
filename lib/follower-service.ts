@@ -3,7 +3,9 @@ import {
   CacheManager,
   FollowerData,
   GitHubAPIClient,
+  GitHubUserSummary,
   FollowerService as IFollowerService,
+  UserStats,
 } from "./types";
 
 /**
@@ -39,7 +41,7 @@ export class FollowerService implements IFollowerService {
 
     // Cache miss or expired - fetch from API
     try {
-      const userData = await this.apiClient.fetchUserFollowers(username);
+      const userData = await this.apiClient.fetchUser(username);
 
       const followerData: FollowerData = {
         username: userData.login,
@@ -61,6 +63,64 @@ export class FollowerService implements IFollowerService {
       }
       throw error;
     }
+  }
+
+  async getUserStats(
+    username: string,
+    forceRefresh: boolean = false
+  ): Promise<UserStats> {
+    const cacheKey = `github:stats:${username}`;
+
+    if (!forceRefresh) {
+      const cachedData = this.cache.get<UserStats>(cacheKey);
+      if (cachedData) {
+        return { ...cachedData, cached: true };
+      }
+    }
+
+    try {
+      const userData = await this.apiClient.fetchUser(username);
+      const stats: UserStats = {
+        username: userData.login,
+        followers: userData.followers,
+        following: userData.following,
+        avatarUrl: userData.avatar_url,
+        name: userData.name,
+        bio: userData.bio,
+        htmlUrl: userData.html_url,
+        publicRepos: userData.public_repos,
+        cached: false,
+        fetchedAt: Date.now(),
+      };
+
+      this.cache.set(cacheKey, stats, this.defaultTTL);
+      return stats;
+    } catch (error) {
+      if (error instanceof GitHubAPIError) throw error;
+      throw error;
+    }
+  }
+
+  async getFollowersList(username: string): Promise<GitHubUserSummary[]> {
+    const cacheKey = `github:followers-list:${username}`;
+    const cached = this.cache.get<GitHubUserSummary[]>(cacheKey);
+    if (cached) return cached;
+
+    // We'll fetch the first 100 for now. For "unfollower" tracking,
+    // we would ideally fetch ALL, but let's start with 100.
+    const data = await this.apiClient.fetchFollowers(username);
+    this.cache.set(cacheKey, data, this.defaultTTL);
+    return data;
+  }
+
+  async getFollowingList(username: string): Promise<GitHubUserSummary[]> {
+    const cacheKey = `github:following-list:${username}`;
+    const cached = this.cache.get<GitHubUserSummary[]>(cacheKey);
+    if (cached) return cached;
+
+    const data = await this.apiClient.fetchFollowing(username);
+    this.cache.set(cacheKey, data, this.defaultTTL);
+    return data;
   }
 }
 

@@ -1,5 +1,5 @@
 /**
- * Type definitions for GitHub Follower Tracker
+ * Type definitions for gitstuff
  */
 
 /**
@@ -8,8 +8,21 @@
 export interface GitHubUser {
   login: string;
   followers: number;
+  following: number;
   avatar_url: string;
   name: string | null;
+  bio: string | null;
+  html_url: string;
+  public_repos: number;
+}
+
+/**
+ * Minimal user info for lists
+ */
+export interface GitHubUserSummary {
+  login: string;
+  avatar_url: string;
+  html_url: string;
 }
 
 /**
@@ -19,6 +32,16 @@ export interface CacheEntry<T> {
   data: T;
   timestamp: number;
   expiresAt: number;
+}
+
+/**
+ * Detailed user data returned to the client
+ */
+export interface UserStats extends FollowerData {
+  following: number;
+  bio: string | null;
+  htmlUrl: string;
+  publicRepos: number;
 }
 
 /**
@@ -36,24 +59,27 @@ export interface FollowerData {
 /**
  * Error codes for API responses
  */
-export type ErrorCode = 
-  | "NOT_FOUND" 
-  | "RATE_LIMIT" 
-  | "NETWORK_ERROR" 
-  | "INVALID_INPUT";
+export type ErrorCode =
+  | "NOT_FOUND"
+  | "RATE_LIMIT"
+  | "NETWORK_ERROR"
+  | "INVALID_INPUT"
+  | "UNAUTHORIZED";
 
 /**
  * API response types
  */
-export type APIResponse = 
-  | { success: true; data: FollowerData }
+export type APIResponse<T = unknown> =
+  | { success: true; data: T }
   | { success: false; error: string; code: ErrorCode };
 
 /**
  * GitHub API Client interface
  */
 export interface GitHubAPIClient {
-  fetchUserFollowers(username: string): Promise<GitHubUser>;
+  fetchUser(username: string): Promise<GitHubUser>;
+  fetchFollowers(username: string, page?: number): Promise<GitHubUserSummary[]>;
+  fetchFollowing(username: string, page?: number): Promise<GitHubUserSummary[]>;
 }
 
 /**
@@ -71,5 +97,11 @@ export interface CacheManager {
  * Follower Service interface
  */
 export interface FollowerService {
-  getFollowerCount(username: string): Promise<FollowerData>;
+  getFollowerCount(
+    username: string,
+    forceRefresh?: boolean
+  ): Promise<FollowerData>;
+  getUserStats(username: string, forceRefresh?: boolean): Promise<UserStats>;
+  getFollowersList(username: string): Promise<GitHubUserSummary[]>;
+  getFollowingList(username: string): Promise<GitHubUserSummary[]>;
 }
