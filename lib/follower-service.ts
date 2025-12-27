@@ -1,6 +1,6 @@
-import { CacheManager } from './cache-manager';
-import { GitHubAPIClient, GitHubAPIError } from './github-api-client';
-import { FollowerData, FollowerService as IFollowerService } from './types';
+import { CacheManager } from "./cache-manager";
+import { GitHubAPIClient, GitHubAPIError } from "./github-api-client";
+import { FollowerData, FollowerService as IFollowerService } from "./types";
 
 /**
  * Service for fetching and caching GitHub follower data
@@ -16,16 +16,21 @@ export class FollowerService implements IFollowerService {
   /**
    * Get follower count for a GitHub user (with caching)
    */
-  async getFollowerCount(username: string): Promise<FollowerData> {
+  async getFollowerCount(
+    username: string,
+    forceRefresh: boolean = false
+  ): Promise<FollowerData> {
     const cacheKey = `github:followers:${username}`;
 
-    // Check cache first
-    const cachedData = this.cache.get<FollowerData>(cacheKey);
-    if (cachedData) {
-      return {
-        ...cachedData,
-        cached: true,
-      };
+    // Check cache first (unless forceRefresh is true)
+    if (!forceRefresh) {
+      const cachedData = this.cache.get<FollowerData>(cacheKey);
+      if (cachedData) {
+        return {
+          ...cachedData,
+          cached: true,
+        };
+      }
     }
 
     // Cache miss or expired - fetch from API
@@ -56,7 +61,10 @@ export class FollowerService implements IFollowerService {
 }
 
 // Create singleton instance
-import { cacheManager } from './cache-manager';
-import { githubAPIClient } from './github-api-client';
+import { cacheManager } from "./cache-manager";
+import { githubAPIClient } from "./github-api-client";
 
-export const followerService = new FollowerService(githubAPIClient, cacheManager);
+export const followerService = new FollowerService(
+  githubAPIClient,
+  cacheManager
+);

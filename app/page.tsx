@@ -1,10 +1,10 @@
-'use client';
+"use client";
 
-import { FollowerDisplay } from '@/components/follower-display';
-import { FollowerTrackerForm } from '@/components/follower-tracker-form';
-import { APIResponse, FollowerData } from '@/lib/types';
-import { Github } from 'lucide-react';
-import { useState } from 'react';
+import { FollowerDisplay } from "@/components/follower-display";
+import { FollowerTrackerForm } from "@/components/follower-tracker-form";
+import { APIResponse, FollowerData } from "@/lib/types";
+import { Github } from "lucide-react";
+import { useState } from "react";
 
 export default function Home() {
   const [followerData, setFollowerData] = useState<FollowerData | null>(null);
@@ -25,8 +25,8 @@ export default function Home() {
       } else {
         setError(data.error);
       }
-    } catch (err) {
-      setError('Failed to fetch data. Please try again.');
+    } catch {
+      setError("Failed to fetch data. Please try again.");
     } finally {
       setIsLoading(false);
     }
@@ -47,7 +47,12 @@ export default function Home() {
 
         <FollowerTrackerForm onSubmit={handleSubmit} isLoading={isLoading} />
 
-        <FollowerDisplay data={followerData} error={error} isLoading={isLoading} />
+        <FollowerDisplay
+          data={followerData}
+          error={error}
+          isLoading={isLoading}
+          isClickable={true}
+        />
       </main>
 
       <footer className="mt-16 text-center text-sm text-muted-foreground">

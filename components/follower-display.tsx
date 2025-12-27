@@ -1,17 +1,30 @@
-'use client';
+"use client";
 
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { FollowerData } from '@/lib/types';
-import { Clock, Users } from 'lucide-react';
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { FollowerData } from "@/lib/types";
+import { Clock, Users } from "lucide-react";
+import Link from "next/link";
 
 interface FollowerDisplayProps {
   data: FollowerData | null;
   error: string | null;
   isLoading: boolean;
+  isClickable?: boolean;
 }
 
-export function FollowerDisplay({ data, error, isLoading }: FollowerDisplayProps) {
+export function FollowerDisplay({
+  data,
+  error,
+  isLoading,
+  isClickable,
+}: FollowerDisplayProps) {
   if (isLoading) {
     return (
       <Card className="w-full max-w-md">
@@ -48,8 +61,14 @@ export function FollowerDisplay({ data, error, isLoading }: FollowerDisplayProps
     return null;
   }
 
-  return (
-    <Card className="w-full max-w-md">
+  const content = (
+    <Card
+      className={`w-full max-w-md ${
+        isClickable
+          ? "hover:border-primary/50 hover:shadow-md transition-all cursor-pointer"
+          : ""
+      }`}
+    >
       <CardHeader>
         <div className="flex items-center gap-4">
           <Avatar className="w-16 h-16">
@@ -57,7 +76,9 @@ export function FollowerDisplay({ data, error, isLoading }: FollowerDisplayProps
             <AvatarFallback>{data.username[0].toUpperCase()}</AvatarFallback>
           </Avatar>
           <div className="flex-1">
-            <CardTitle className="text-xl">{data.name || data.username}</CardTitle>
+            <CardTitle className="text-xl">
+              {data.name || data.username}
+            </CardTitle>
             <CardDescription>@{data.username}</CardDescription>
           </div>
         </div>
@@ -66,11 +87,13 @@ export function FollowerDisplay({ data, error, isLoading }: FollowerDisplayProps
         <div className="flex items-center gap-2">
           <Users className="w-5 h-5 text-muted-foreground" />
           <div>
-            <p className="text-3xl font-bold">{data.followers.toLocaleString()}</p>
+            <p className="text-3xl font-bold">
+              {data.followers.toLocaleString()}
+            </p>
             <p className="text-sm text-muted-foreground">Followers</p>
           </div>
         </div>
-        
+
         {data.cached && (
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Clock className="w-4 h-4" />
@@ -80,4 +103,14 @@ export function FollowerDisplay({ data, error, isLoading }: FollowerDisplayProps
       </CardContent>
     </Card>
   );
+
+  if (isClickable) {
+    return (
+      <Link href={`/${data.username}`} className="w-full max-w-md block">
+        {content}
+      </Link>
+    );
+  }
+
+  return content;
 }
