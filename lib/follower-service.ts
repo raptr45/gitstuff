@@ -1,6 +1,10 @@
-import { CacheManager } from "./cache-manager";
-import { GitHubAPIClient, GitHubAPIError } from "./github-api-client";
-import { FollowerData, FollowerService as IFollowerService } from "./types";
+import { GitHubAPIError } from "./github-api-client";
+import {
+  CacheManager,
+  FollowerData,
+  GitHubAPIClient,
+  FollowerService as IFollowerService,
+} from "./types";
 
 /**
  * Service for fetching and caching GitHub follower data
