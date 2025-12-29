@@ -59,6 +59,7 @@ export function UserPageClient({ username }: UserPageClientProps) {
     saveFollowerState,
     isWhitelisted,
     setWhitelists,
+    updateUserWhitelist,
   } = useStore();
 
   const [stats, setStats] = useState<UserStats | null>(null);
@@ -138,14 +139,14 @@ export function UserPageClient({ username }: UserPageClientProps) {
         const logins = data.data.map(
           (w: { whiteListed: string }) => w.whiteListed
         );
-        setWhitelists({ ...whitelists, [username]: logins });
+        updateUserWhitelist(username, logins);
       }
     } catch (err) {
       console.error("Failed to fetch whitelist", err);
     } finally {
       setLoadingStates((prev) => ({ ...prev, whitelist: false }));
     }
-  }, [username, setWhitelists, whitelists]);
+  }, [username, updateUserWhitelist]);
 
   const fetchAllData = useCallback(
     async (refresh = false) => {

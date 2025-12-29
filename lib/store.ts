@@ -23,6 +23,7 @@ interface UserState {
     unfollowers: GitHubUserSummary[];
   };
   setWhitelists: (whitelists: Record<string, string[]>) => void;
+  updateUserWhitelist: (targetUsername: string, logins: string[]) => void;
 }
 
 export const useStore = create<UserState>()(
@@ -82,6 +83,11 @@ export const useStore = create<UserState>()(
       },
 
       setWhitelists: (whitelists) => set({ whitelists }),
+
+      updateUserWhitelist: (target, logins) =>
+        set((state) => ({
+          whitelists: { ...state.whitelists, [target]: logins },
+        })),
     }),
     {
       name: "gitstuff-storage",
