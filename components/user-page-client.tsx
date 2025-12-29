@@ -26,15 +26,12 @@ import { useStore } from "@/lib/store";
 import { APIResponse, GitHubUserSummary, UserStats } from "@/lib/types";
 import {
   BookMarked,
-  Github,
-  LogOut,
   RefreshCw,
   Search,
   ShieldAlert,
   ShieldCheck,
   UserPlus
 } from "lucide-react";
-import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
@@ -271,57 +268,18 @@ export function UserPageClient({ username }: UserPageClientProps) {
   return (
     <div className="min-h-screen bg-background p-4 md:p-8">
       <div className="max-w-6xl mx-auto space-y-8">
-        {/* Header Navigation */}
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-          <Button variant="ghost" asChild className="pl-0 hover:bg-transparent">
-            <Link href="/" className="flex items-center gap-2 group">
-              <span className="text-2xl">🐱</span>
-              <span className="text-xl font-bold tracking-tight uppercase">
-                gitstuff
-              </span>
-            </Link>
-          </Button>
-
-          <div className="flex items-center gap-2 w-full md:w-auto">
-            <Button
+        <div className="flex justify-end mb-4">
+             <Button
               variant="outline"
               onClick={() => fetchAllData(true)}
               disabled={isRefreshing}
-              className="flex-1 md:flex-none gap-2 rounded-xl"
+              className="gap-2 rounded-xl"
             >
               <RefreshCw
                 className={`w-4 h-4 ${isRefreshing ? "animate-spin" : ""}`}
               />
-              Refresh
+              Refresh Data
             </Button>
-
-            {session ? (
-              <div className="flex items-center gap-2">
-                <Avatar className="w-10 h-10 ring-2 ring-amber-500/20">
-                  <AvatarImage src={session.user.image || ""} />
-                  <AvatarFallback>{session.user.name[0]}</AvatarFallback>
-                </Avatar>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="rounded-xl hover:bg-red-50 dark:hover:bg-red-950/20 text-red-500"
-                  onClick={() => authClient.signOut()}
-                >
-                  <LogOut className="w-5 h-5" />
-                </Button>
-              </div>
-            ) : (
-              <Button
-                asChild
-                className="flex-1 md:flex-none gap-2 bg-zinc-900 dark:bg-zinc-100 rounded-xl"
-              >
-                <Link href="/login">
-                  <Github className="w-4 h-4" />
-                  Connect
-                </Link>
-              </Button>
-            )}
-          </div>
         </div>
 
         {/* User Card - Ultra Premium */}
@@ -441,7 +399,7 @@ export function UserPageClient({ username }: UserPageClientProps) {
             <div className="relative w-full md:w-80">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <Input
-                placeholder="Search users..."
+                placeholder="Search by username..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="pl-9 bg-muted/20 border-border/50"

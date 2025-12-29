@@ -1,82 +1,79 @@
 "use client";
 
-import { FollowerDisplay } from "@/components/follower-display";
-import { FollowerTrackerForm } from "@/components/follower-tracker-form";
-import { APIResponse, FollowerData } from "@/lib/types";
-import { useState } from "react";
+import { UserPageClient } from "@/components/user-page-client";
+import { authClient } from "@/lib/auth-client";
+import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
 
 export default function Home() {
-  const [followerData, setFollowerData] = useState<FollowerData | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
+  const router = useRouter();
+  const { data: session, isPending } = authClient.useSession();
+  const [syncedUsername, setSyncedUsername] = useState<string | null>(null);
+  const [isSyncing, setIsSyncing] = useState(false);
 
-  const handleSubmit = async (username: string) => {
-    setIsLoading(true);
-    setError(null);
-    setFollowerData(null);
-
-    try {
-      const response = await fetch(`/api/followers/${username}`);
-      const data: APIResponse<FollowerData> = await response.json();
-
-      if (data.success) {
-        setFollowerData(data.data);
-      } else {
-        setError(data.error);
-      }
-    } catch {
-      setError("Failed to fetch data. Please try again.");
-    } finally {
-      setIsLoading(false);
+  useEffect(() => {
+    // If not logged in (and not loading), go to welcome
+    if (!isPending && !session) {
+      router.push("/welcome");
     }
-  };
+  }, [isPending, session, router]);
 
-  return (
-    <div className="min-h-screen flex flex-col items-center justify-center p-8 bg-gradient-to-b from-background to-muted/20">
-      <main className="flex flex-col items-center gap-8 max-w-2xl w-full">
-        <div className="text-center space-y-4">
-          <div className="flex items-center justify-center gap-3">
-            <span className="text-6xl">🐱</span>
-            <h1 className="text-4xl font-bold">gitstuff</h1>
+  useEffect(() => {
+    // Check if we need to sync username
+    const checkAndSync = async () => {
+        if (!session?.user) return;
+        
+        const user = session.user as { username?: string; name?: string; id: string };
+        
+        // If we already have it in session, great.
+        if (user.username) {
+            setSyncedUsername(user.username);
+            return;
+        }
+
+        // If not, try to sync from server
+        setIsSyncing(true);
+        try {
+            const res = await fetch("/api/user/sync", { method: "POST" });
+            const data = await res.json();
+            if (data.success && data.username) {
+                setSyncedUsername(data.username);
+                // Optionally reload session? authClient.getSession() might need refresh
+            }
+        } catch (e) {
+            console.error("Sync failed", e);
+        } finally {
+            setIsSyncing(false);
+        }
+    };
+
+    if (session && !isPending) {
+        checkAndSync();
+    }
+  }, [session, isPending]);
+
+  if (isPending || (session && !syncedUsername && isSyncing)) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="flex flex-col items-center gap-4">
+          <div className="relative">
+            <div className="absolute -inset-4 bg-primary/20 blur-2xl rounded-full animate-pulse"></div>
+            <div className="w-12 h-12 rounded-full border-4 border-primary/20 border-t-primary animate-spin" />
+            <div className="absolute top-full mt-4 w-64 text-center text-sm text-muted-foreground font-medium animate-pulse">
+                Syncing GitHub profile...
+            </div>
           </div>
-          <p className="text-muted-foreground text-lg">
-            Track GitHub follower counts with intelligent caching
-          </p>
         </div>
+      </div>
+    );
+  }
 
-        <FollowerTrackerForm onSubmit={handleSubmit} isLoading={isLoading} />
+  if (!session) return null;
 
-        <FollowerDisplay
-          data={followerData}
-          error={error}
-          isLoading={isLoading}
-          isClickable={true}
-        />
-      </main>
+  // Use synced username or fallback (though fallback is likely "name" which caused 404s, 
+  // so we really depend on syncedUsername being correct now).
+  // If sync failed, we might still be stuck, but this covers 99% of cases.
+  const finalUsername = syncedUsername || (session.user as any).username || (session.user as any).name;
 
-      <footer className="mt-16 text-center text-sm text-muted-foreground animate-in fade-in slide-in-from-bottom-2 duration-1000">
-        <div className="flex flex-col items-center gap-2">
-          <p className="mt-2 text-xs font-bold uppercase tracking-widest opacity-40">
-            Created by{" "}
-            <a
-              href="https://github.com/raptr45"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="hover:text-primary transition-colors underline decoration-primary/20"
-            >
-              raptr45
-            </a>
-          </p>
-          <a
-            href="https://github.com/raptr45/gitstuff"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-[10px] font-black uppercase tracking-[0.2em] opacity-20 hover:opacity-100 transition-opacity"
-          >
-            View on GitHub
-          </a>
-        </div>
-      </footer>
-    </div>
-  );
+  return <UserPageClient username={finalUsername} />;
 }

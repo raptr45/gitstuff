@@ -6,13 +6,23 @@ export const auth = betterAuth({
   database: prismaAdapter(prisma, {
     provider: "postgresql",
   }),
+  user: {
+    additionalFields: {
+      username: {
+        type: "string",
+      },
+    },
+  },
   socialProviders: {
     github: {
       clientId: process.env.GITHUB_CLIENT_ID!,
       clientSecret: process.env.GITHUB_CLIENT_SECRET!,
-      // This is crucial: requesting permission to follow/unfollow
       scope: ["user:follow", "read:user"],
+      mapProfileToUser: (profile) => {
+        return {
+          username: profile.login,
+        };
+      },
     },
   },
-  // ... other config (database, etc.)
 });
