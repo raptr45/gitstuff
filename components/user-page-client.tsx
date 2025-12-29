@@ -507,10 +507,10 @@ export function UserPageClient({ username }: UserPageClientProps) {
                     <div className="flex items-center justify-between">
                       <div className="space-y-1">
                         <div className="flex items-center gap-3">
-                          <div className="p-2.5 bg-blue-600 rounded-xl shadow-[0_0_20px_rgba(37,99,235,0.3)]">
+                          <div className="p-2.5 bg-red-600 rounded-xl shadow-[0_0_20px_rgba(37,99,235,0.3)]">
                             <ShieldAlert className="w-5 h-5 text-white" />
                           </div>
-                          <CardTitle className="text-2xl font-black tracking-tight bg-linear-to-br from-blue-600 to-blue-400 bg-clip-text text-transparent">
+                          <CardTitle className="text-2xl font-black tracking-tight bg-linear-to-br from-red-600 to-red-400 bg-clip-text text-transparent">
                             Potential Unfollows
                           </CardTitle>
                         </div>
