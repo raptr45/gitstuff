@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { authClient } from "@/lib/auth-client";
-import { Database, Github, LogOut, Search, User } from "lucide-react";
+import { Contrast, Database, Github, LogOut, Search, User } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -78,14 +78,18 @@ export function Navbar() {
                   <div className="flex flex-col space-y-1">
                     <p className="text-sm font-medium leading-none">{session.user.name}</p>
                     <p className="text-xs leading-none text-muted-foreground">
-                      {(session.user as any).username || session.user.email}
+                      {`@${(session.user as any).username}` || session.user.email}
                     </p>
                   </div>
                 </DropdownMenuLabel>
                 
                 <div className="flex items-center justify-between px-2 py-1.5">
+                  {/* lets add a contrast icon here */}
+                  <div className="flex items-center gap-2">
+                    <Contrast className="mr-2 h-4 w-4" />
                     <span className="text-sm font-medium">Theme</span>
-                    <ThemeSwitcher />
+                  </div>
+                  <ThemeSwitcher />
                 </div>
                 
                 <DropdownMenuSeparator className="my-2" />
@@ -106,7 +110,7 @@ export function Navbar() {
                 <DropdownMenuSeparator className="my-2" />
                 
                 <DropdownMenuItem
-                    className="text-red-600 focus:text-red-600 cursor-pointer" 
+                    className="font-semibold text-red-400 focus:text-red-500 cursor-pointer" 
                     onClick={() => authClient.signOut().then(() => window.location.reload())}
                 >
                   <LogOut className="mr-2 h-4 w-4" />
