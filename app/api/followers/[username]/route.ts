@@ -11,6 +11,26 @@ export async function GET(
     const { username } = await params;
     const forceRefresh = request.nextUrl.searchParams.get("refresh") === "true";
 
+    // Try to get token for authenticated request (higher rate limit)
+    const { auth } = await import("@/lib/auth");
+    const { prisma } = await import("@/lib/prisma");
+
+    const session = await auth.api.getSession({
+      headers: request.headers,
+    });
+
+    let token: string | undefined;
+
+    if (session) {
+      const account = await prisma.account.findFirst({
+        where: {
+          userId: session.user.id,
+          providerId: "github",
+        },
+      });
+      token = account?.accessToken || undefined;
+    }
+
     // Validate input
     if (!username || username.trim() === "") {
       const errorResponse: APIResponse = {
@@ -24,7 +44,8 @@ export async function GET(
     // Fetch follower data
     const data = await followerService.getFollowerCount(
       username.trim(),
-      forceRefresh
+      forceRefresh,
+      token
     );
 
     const successResponse: APIResponse = {

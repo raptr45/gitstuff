@@ -24,7 +24,8 @@ export class FollowerService implements IFollowerService {
    */
   async getFollowerCount(
     username: string,
-    forceRefresh: boolean = false
+    forceRefresh: boolean = false,
+    token?: string
   ): Promise<FollowerData> {
     const cacheKey = `github:followers:${username}`;
 
@@ -41,7 +42,7 @@ export class FollowerService implements IFollowerService {
 
     // Cache miss or expired - fetch from API
     try {
-      const userData = await this.apiClient.fetchUser(username);
+      const userData = await this.apiClient.fetchUser(username, token);
 
       const followerData: FollowerData = {
         username: userData.login,
@@ -67,7 +68,8 @@ export class FollowerService implements IFollowerService {
 
   async getUserStats(
     username: string,
-    forceRefresh: boolean = false
+    forceRefresh: boolean = false,
+    token?: string
   ): Promise<UserStats> {
     const cacheKey = `github:stats:${username}`;
 
@@ -79,7 +81,7 @@ export class FollowerService implements IFollowerService {
     }
 
     try {
-      const userData = await this.apiClient.fetchUser(username);
+      const userData = await this.apiClient.fetchUser(username, token);
       const stats: UserStats = {
         username: userData.login,
         followers: userData.followers,
@@ -101,26 +103,65 @@ export class FollowerService implements IFollowerService {
     }
   }
 
-  async getFollowersList(username: string): Promise<GitHubUserSummary[]> {
+  async getFollowersList(
+    username: string,
+    token?: string
+  ): Promise<GitHubUserSummary[]> {
     const cacheKey = `github:followers-list:${username}`;
     const cached = this.cache.get<GitHubUserSummary[]>(cacheKey);
     if (cached) return cached;
 
-    // We'll fetch the first 100 for now. For "unfollower" tracking,
-    // we would ideally fetch ALL, but let's start with 100.
-    const data = await this.apiClient.fetchFollowers(username);
-    this.cache.set(cacheKey, data, this.defaultTTL);
-    return data;
+    // First get the count to know how many pages
+    const stats = await this.getUserStats(username, false, token);
+    const total = stats.followers;
+    const pages = Math.ceil(total / 100);
+
+    const fullList: GitHubUserSummary[] = [];
+
+    // Fetch all pages
+    // For large counts (e.g. 1k+), this might take a few seconds
+    // but with per_page=100 it's manageable.
+    for (let page = 1; page <= pages; page++) {
+      const pageData = await this.apiClient.fetchFollowers(
+        username,
+        page,
+        token
+      );
+      fullList.push(...pageData);
+      // Safety break for extreme cases to avoid infinite loops or memory issues
+      if (page >= 50 || pageData.length === 0) break;
+    }
+
+    this.cache.set(cacheKey, fullList, this.defaultTTL);
+    return fullList;
   }
 
-  async getFollowingList(username: string): Promise<GitHubUserSummary[]> {
+  async getFollowingList(
+    username: string,
+    token?: string
+  ): Promise<GitHubUserSummary[]> {
     const cacheKey = `github:following-list:${username}`;
     const cached = this.cache.get<GitHubUserSummary[]>(cacheKey);
     if (cached) return cached;
 
-    const data = await this.apiClient.fetchFollowing(username);
-    this.cache.set(cacheKey, data, this.defaultTTL);
-    return data;
+    const stats = await this.getUserStats(username, false, token);
+    const total = stats.following;
+    const pages = Math.ceil(total / 100);
+
+    const fullList: GitHubUserSummary[] = [];
+
+    for (let page = 1; page <= pages; page++) {
+      const pageData = await this.apiClient.fetchFollowing(
+        username,
+        page,
+        token
+      );
+      fullList.push(...pageData);
+      if (page >= 50 || pageData.length === 0) break;
+    }
+
+    this.cache.set(cacheKey, fullList, this.defaultTTL);
+    return fullList;
   }
 }
 

@@ -11,6 +11,26 @@ export async function GET(
     const { username } = await params;
     const type = request.nextUrl.searchParams.get("type") || "followers";
 
+    // Try to get token for authenticated request (higher rate limit)
+    const { auth } = await import("@/lib/auth");
+    const { prisma } = await import("@/lib/prisma");
+
+    const session = await auth.api.getSession({
+      headers: request.headers,
+    });
+
+    let token: string | undefined;
+
+    if (session) {
+      const account = await prisma.account.findFirst({
+        where: {
+          userId: session.user.id,
+          providerId: "github",
+        },
+      });
+      token = account?.accessToken || undefined;
+    }
+
     if (!username) {
       return NextResponse.json(
         { success: false, error: "User required" },
@@ -20,8 +40,8 @@ export async function GET(
 
     const data =
       type === "following"
-        ? await followerService.getFollowingList(username)
-        : await followerService.getFollowersList(username);
+        ? await followerService.getFollowingList(username, token)
+        : await followerService.getFollowersList(username, token);
 
     return NextResponse.json({ success: true, data });
   } catch (error) {

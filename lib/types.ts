@@ -77,9 +77,17 @@ export type APIResponse<T = unknown> =
  * GitHub API Client interface
  */
 export interface GitHubAPIClient {
-  fetchUser(username: string): Promise<GitHubUser>;
-  fetchFollowers(username: string, page?: number): Promise<GitHubUserSummary[]>;
-  fetchFollowing(username: string, page?: number): Promise<GitHubUserSummary[]>;
+  fetchUser(username: string, token?: string): Promise<GitHubUser>;
+  fetchFollowers(
+    username: string,
+    page?: number,
+    token?: string
+  ): Promise<GitHubUserSummary[]>;
+  fetchFollowing(
+    username: string,
+    page?: number,
+    token?: string
+  ): Promise<GitHubUserSummary[]>;
 }
 
 /**
@@ -99,9 +107,20 @@ export interface CacheManager {
 export interface FollowerService {
   getFollowerCount(
     username: string,
-    forceRefresh?: boolean
+    forceRefresh?: boolean,
+    token?: string
   ): Promise<FollowerData>;
-  getUserStats(username: string, forceRefresh?: boolean): Promise<UserStats>;
-  getFollowersList(username: string): Promise<GitHubUserSummary[]>;
-  getFollowingList(username: string): Promise<GitHubUserSummary[]>;
+  getUserStats(
+    username: string,
+    forceRefresh?: boolean,
+    token?: string
+  ): Promise<UserStats>;
+  getFollowersList(
+    username: string,
+    token?: string
+  ): Promise<GitHubUserSummary[]>;
+  getFollowingList(
+    username: string,
+    token?: string
+  ): Promise<GitHubUserSummary[]>;
 }

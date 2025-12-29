@@ -28,19 +28,26 @@ export class GitHubAPIClient implements IGitHubAPIClient {
 
   private async request<T>(
     endpoint: string,
-    options: RequestInit = {}
+    options: RequestInit = {},
+    token?: string
   ): Promise<T> {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), this.timeout);
 
     try {
+      const headers: Record<string, string> = {
+        "User-Agent": "gitstuff",
+        Accept: "application/vnd.github.v3+json",
+        ...((options.headers as Record<string, string>) || {}),
+      };
+
+      if (token) {
+        headers["Authorization"] = `token ${token}`;
+      }
+
       const response = await fetch(`${this.baseUrl}${endpoint}`, {
         ...options,
-        headers: {
-          "User-Agent": "gitstuff",
-          Accept: "application/vnd.github.v3+json",
-          ...options.headers,
-        },
+        headers,
         signal: controller.signal,
       });
 
@@ -95,9 +102,11 @@ export class GitHubAPIClient implements IGitHubAPIClient {
     }
   }
 
-  async fetchUser(username: string): Promise<GitHubUser> {
+  async fetchUser(username: string, token?: string): Promise<GitHubUser> {
     const data = await this.request<Record<string, unknown>>(
-      `/users/${username}`
+      `/users/${username}`,
+      {},
+      token
     );
     return {
       login: data.login as string,
@@ -113,10 +122,13 @@ export class GitHubAPIClient implements IGitHubAPIClient {
 
   async fetchFollowers(
     username: string,
-    page = 1
+    page = 1,
+    token?: string
   ): Promise<GitHubUserSummary[]> {
     const data = await this.request<Record<string, unknown>[]>(
-      `/users/${username}/followers?per_page=100&page=${page}`
+      `/users/${username}/followers?per_page=100&page=${page}`,
+      {},
+      token
     );
     return data.map((item) => ({
       login: item.login as string,
@@ -127,10 +139,13 @@ export class GitHubAPIClient implements IGitHubAPIClient {
 
   async fetchFollowing(
     username: string,
-    page = 1
+    page = 1,
+    token?: string
   ): Promise<GitHubUserSummary[]> {
     const data = await this.request<Record<string, unknown>[]>(
-      `/users/${username}/following?per_page=100&page=${page}`
+      `/users/${username}/following?per_page=100&page=${page}`,
+      {},
+      token
     );
     return data.map((item) => ({
       login: item.login as string,
