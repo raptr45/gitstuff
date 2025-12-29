@@ -11,7 +11,6 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Table,
   TableBody,
@@ -21,28 +20,19 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
 import { UserGrid } from "@/components/user-grid";
 import { authClient } from "@/lib/auth-client";
 import { useStore } from "@/lib/store";
 import { APIResponse, GitHubUserSummary, UserStats } from "@/lib/types";
 import {
   BookMarked,
-  ExternalLink,
   Github,
   LogOut,
   RefreshCw,
   Search,
   ShieldAlert,
   ShieldCheck,
-  UserMinus,
-  UserPlus,
-  UserX,
+  UserPlus
 } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -236,6 +226,12 @@ export function UserPageClient({ username }: UserPageClientProps) {
   const whitelist = useMemo(
     () => whitelists[username] || [],
     [whitelists, username]
+  );
+
+  const potentialUnfollows = useMemo(
+    () =>
+      following.filter((ing) => !followers.some((f) => f.login === ing.login)),
+    [following, followers]
   );
 
   if (loadingStates.stats && !stats) {
@@ -500,101 +496,7 @@ export function UserPageClient({ username }: UserPageClientProps) {
           </TabsContent>
 
           <TabsContent value="tracking" className="m-0 space-y-8 outline-none">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-              {/* Lost Followers Card - Ultra Premium */}
-              <div className="relative group">
-                <div className="absolute -inset-0.5 bg-linear-to-r from-red-600 to-pink-600 rounded-[2rem] blur opacity-10 group-hover:opacity-20 transition duration-1000 group-hover:duration-200"></div>
-                <Card className="relative border-none shadow-2xl bg-white/80 dark:bg-zinc-950/80 backdrop-blur-3xl rounded-[2rem] overflow-hidden">
-                  <div className="absolute top-0 right-0 w-32 h-32 bg-red-500/10 blur-[60px] rounded-full -mr-10 -mt-10 animate-pulse"></div>
-                  <CardHeader className="border-b border-zinc-500/10 pb-6 relative z-10">
-                    <div className="flex items-center justify-between">
-                      <div className="space-y-1">
-                        <div className="flex items-center gap-3">
-                          <div className="p-2.5 bg-red-600 rounded-xl shadow-[0_0_20px_rgba(220,38,38,0.3)]">
-                            <UserMinus className="w-5 h-5 text-white" />
-                          </div>
-                          <CardTitle className="text-2xl font-black tracking-tight bg-linear-to-br from-red-600 to-red-400 bg-clip-text text-transparent">
-                            Lost Followers
-                          </CardTitle>
-                        </div>
-                        <CardDescription className="text-zinc-500 font-bold ml-12">
-                          Recent unfollowers detection
-                        </CardDescription>
-                      </div>
-                    </div>
-                  </CardHeader>
-                  <CardContent className="p-0 relative z-10">
-                    <ScrollArea className="h-[500px]">
-                      {unfollowers.length === 0 ? (
-                        <div className="p-24 text-center flex flex-col items-center justify-center gap-6">
-                          <div className="relative">
-                            <div className="absolute -inset-4 bg-green-500/20 blur-xl rounded-full"></div>
-                            <div className="relative w-20 h-20 rounded-3xl bg-linear-to-br from-green-500 to-emerald-600 flex items-center justify-center shadow-lg">
-                              <ShieldCheck className="w-10 h-10 text-white" />
-                            </div>
-                          </div>
-                          <div className="space-y-2">
-                            <p className="text-2xl font-black dark:text-white">
-                              Impeccable!
-                            </p>
-                            <p className="text-zinc-500 font-medium">
-                              Your circle remains strong. No recent exits
-                              detected.
-                            </p>
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="p-4 space-y-3">
-                          {unfollowers.map((f) => (
-                            <div
-                              key={`lost-${f.login}`}
-                              className="p-4 flex items-center justify-between rounded-2xl bg-zinc-500/5 hover:bg-red-500/3 ring-1 ring-zinc-500/10 hover:ring-red-500/20 transition-all duration-300 group/item"
-                            >
-                              <div className="flex items-center gap-4">
-                                <div className="relative">
-                                  <Avatar className="w-14 h-14 ring-2 ring-white dark:ring-zinc-900 shadow-xl transition-transform group-hover/item:scale-105">
-                                    <AvatarImage src={f.avatar_url} />
-                                    <AvatarFallback className="bg-red-50 text-red-600 font-black">
-                                      {f.login[0]}
-                                    </AvatarFallback>
-                                  </Avatar>
-                                  {isWhitelisted(username, f.login) && (
-                                    <div className="absolute -top-1 -right-1 w-5 h-5 bg-blue-600 rounded-full flex items-center justify-center border-2 border-white dark:border-zinc-900 shadow-lg">
-                                      <BookMarked className="w-2.5 h-2.5 text-white" />
-                                    </div>
-                                  )}
-                                </div>
-                                <div>
-                                  <p className="font-black text-lg text-zinc-800 dark:text-zinc-100">
-                                    @{f.login}
-                                  </p>
-                                  <p className="text-xs text-zinc-500 font-bold uppercase tracking-wider">
-                                    Unfollowed recently
-                                  </p>
-                                </div>
-                              </div>
-                              <Button
-                                variant="outline"
-                                size="icon"
-                                asChild
-                                className="rounded-xl border-zinc-200 dark:border-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-800 hover:border-red-500/50 transition-colors"
-                              >
-                                <a
-                                  href={f.html_url}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                >
-                                  <ExternalLink className="w-4 h-4" />
-                                </a>
-                              </Button>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </ScrollArea>
-                  </CardContent>
-                </Card>
-              </div>
+            <div className="flex flex-col gap-8">
 
               {/* Potential Unfollows Card - Ultra Premium */}
               <div className="relative group">
@@ -618,86 +520,23 @@ export function UserPageClient({ username }: UserPageClientProps) {
                       </div>
                     </div>
                   </CardHeader>
-                  <CardContent className="p-0 relative z-10">
-                    <ScrollArea className="h-[500px]">
-                      <div className="p-4 space-y-3">
-                        {following
-                          .filter(
-                            (ing) =>
-                              !followers.some((f) => f.login === ing.login)
-                          )
-                          .map((ing) => (
-                            <div
-                              key={`potential-${ing.login}`}
-                              className="p-4 flex items-center justify-between rounded-2xl bg-zinc-500/5 hover:bg-blue-500/3 ring-1 ring-zinc-500/10 hover:ring-blue-500/20 transition-all duration-300 group/item"
-                            >
-                              <div className="flex items-center gap-4">
-                                <Avatar className="w-14 h-14 ring-2 ring-white dark:ring-zinc-900 shadow-xl transition-transform group-hover/item:scale-105">
-                                  <AvatarImage src={ing.avatar_url} />
-                                  <AvatarFallback className="bg-blue-50 text-blue-600 font-black">
-                                    {ing.login[0]}
-                                  </AvatarFallback>
-                                </Avatar>
-                                <div>
-                                  <p className="font-black text-lg text-zinc-800 dark:text-zinc-100">
-                                    @{ing.login}
-                                  </p>
-                                  <p className="text-xs text-zinc-500 font-bold uppercase tracking-wider">
-                                    Not following back
-                                  </p>
-                                </div>
-                              </div>
-                              <div className="flex items-center gap-2">
-                                {session && (
-                                  <TooltipProvider>
-                                    <Tooltip>
-                                      <TooltipTrigger asChild>
-                                        <Button
-                                          variant="ghost"
-                                          size="icon"
-                                          onClick={() => {
-                                            if (
-                                              isWhitelisted(username, ing.login)
-                                            ) {
-                                              toast.error(
-                                                "User is Shielded. Remove protection first to unfollow."
-                                              );
-                                              return;
-                                            }
-                                            handleUnfollow(ing.login);
-                                          }}
-                                          className="rounded-xl h-10 w-10 text-red-500/40 hover:text-red-500 hover:bg-red-500/10 transition-all"
-                                        >
-                                          <UserX className="w-5 h-5" />
-                                        </Button>
-                                      </TooltipTrigger>
-                                      <TooltipContent>
-                                        <p className="font-bold">
-                                          Unfollow Authenticated
-                                        </p>
-                                      </TooltipContent>
-                                    </Tooltip>
-                                  </TooltipProvider>
-                                )}
-                                <Button
-                                  variant="outline"
-                                  size="icon"
-                                  asChild
-                                  className="rounded-xl border-zinc-200 dark:border-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
-                                >
-                                  <a
-                                    href={ing.html_url}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                  >
-                                    <ExternalLink className="w-4 h-4" />
-                                  </a>
-                                </Button>
-                              </div>
-                            </div>
-                          ))}
-                      </div>
-                    </ScrollArea>
+                  <CardContent className="p-6 relative z-10">
+                    <UserGrid
+                      users={potentialUnfollows}
+                      onToggleWhitelist={handleToggleWhitelist}
+                      whitelist={whitelist}
+                      isLoading={loadingStates.following || loadingStates.followers}
+                      variant="danger"
+                      onUnfollow={(login) => {
+                        if (isWhitelisted(username, login)) {
+                          toast.error(
+                            "User is Shielded. Remove protection first to unfollow."
+                          );
+                          return;
+                        }
+                        handleUnfollow(login);
+                      }}
+                    />
                   </CardContent>
                 </Card>
               </div>

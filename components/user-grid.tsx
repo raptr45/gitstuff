@@ -12,22 +12,26 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { GitHubUserSummary } from "@/lib/types";
-import { ExternalLink, ShieldAlert, ShieldCheck } from "lucide-react";
+import { ExternalLink, ShieldAlert, ShieldCheck, UserX } from "lucide-react";
 
 interface UserGridProps {
   users: GitHubUserSummary[];
   onToggleWhitelist: (login: string) => void | Promise<void>;
+  onUnfollow?: (login: string) => void | Promise<void>;
   whitelist: string[];
   showFollowBackStatus?: GitHubUserSummary[];
   isLoading?: boolean;
+  variant?: "default" | "danger";
 }
 
 export function UserGrid({
   users,
   onToggleWhitelist,
+  onUnfollow,
   whitelist,
   showFollowBackStatus,
   isLoading,
+  variant = "default",
 }: UserGridProps) {
   const [visibleCount, setVisibleCount] = useState(20);
 
@@ -80,7 +84,11 @@ export function UserGrid({
         return (
           <div
             key={user.login}
-            className="group relative flex items-center justify-between p-4 rounded-3xl bg-white/60 dark:bg-zinc-900/60 backdrop-blur-xl border border-zinc-500/10 hover:border-primary/20 hover:bg-white/80 dark:hover:bg-zinc-900/80 hover:shadow-lg transition-all duration-300"
+            className={`group relative flex items-center justify-between p-4 rounded-3xl backdrop-blur-xl border transition-all duration-300 ${
+              variant === "danger"
+                ? "bg-red-500/5 dark:bg-red-950/20 border-red-500/10 hover:border-red-500/30 hover:bg-red-500/10 dark:hover:bg-red-900/40 hover:shadow-lg hover:shadow-red-500/10"
+                : "bg-white/60 dark:bg-zinc-900/60 border-zinc-500/10 hover:border-primary/20 hover:bg-white/80 dark:hover:bg-zinc-900/80 hover:shadow-lg"
+            }`}
           >
             <div className="flex items-center gap-4">
               <div className="relative">
@@ -144,6 +152,8 @@ export function UserGrid({
                       className={`h-11 w-11 rounded-2xl transition-all duration-300 ${
                         isWl
                           ? "bg-blue-500 text-white shadow-lg shadow-blue-500/20 hover:bg-blue-600"
+                          : variant === "danger"
+                          ? "bg-red-500/10 text-red-400 hover:bg-red-500/20 hover:text-red-500"
                           : "bg-zinc-500/5 text-zinc-400 hover:bg-zinc-500/10 hover:text-zinc-600 dark:hover:text-zinc-300"
                       }`}
                     >
@@ -163,6 +173,35 @@ export function UserGrid({
                   </TooltipContent>
                 </Tooltip>
               </TooltipProvider>
+
+              {onUnfollow && (
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => !isWl && onUnfollow(user.login)}
+                        disabled={isWl}
+                        className={`h-11 w-11 rounded-2xl transition-all duration-300 ${
+                          isWl
+                            ? "opacity-50 cursor-not-allowed bg-zinc-500/5 text-zinc-400"
+                            : "bg-red-500/10 text-red-500 hover:bg-red-500/20 hover:text-red-600"
+                        }`}
+                      >
+                        <UserX className="w-5 h-5" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p className="font-bold">
+                        {isWl
+                          ? "Protected User (Remove Shield First)"
+                          : "Unfollow User"}
+                      </p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              )}
             </div>
           </div>
         );
