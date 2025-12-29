@@ -27,18 +27,21 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { authClient } from "@/lib/auth-client";
 import { useStore } from "@/lib/store";
 import { APIResponse, GitHubUserSummary, UserStats } from "@/lib/types";
 import {
   BookMarked,
   ExternalLink,
   Github,
+  LogOut,
   RefreshCw,
   Search,
   ShieldAlert,
   ShieldCheck,
   UserMinus,
   UserPlus,
+  UserX,
 } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -111,6 +114,32 @@ export function UserPageClient({ username }: UserPageClientProps) {
       }
     },
     [username, saveFollowerState]
+  );
+
+  const { data: session } = authClient.useSession();
+
+  const handleUnfollow = useCallback(
+    async (targetLogin: string) => {
+      try {
+        const res = await fetch("/api/actions/unfollow", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ targetUsername: targetLogin }),
+        });
+
+        const data = await res.json();
+        if (data.success) {
+          toast.success(`Succesfully unfollowed @${targetLogin}`);
+          // Optionally refresh data to reflect changes
+          fetchAllData(true);
+        } else {
+          toast.error(data.error || "Failed to unfollow");
+        }
+      } catch {
+        toast.error("An error occurred while trying to unfollow");
+      }
+    },
+    [fetchAllData]
   );
 
   useEffect(() => {
@@ -188,24 +217,40 @@ export function UserPageClient({ username }: UserPageClientProps) {
               variant="outline"
               onClick={() => fetchAllData(true)}
               disabled={isRefreshing}
-              className="flex-1 md:flex-none gap-2"
+              className="flex-1 md:flex-none gap-2 rounded-xl"
             >
               <RefreshCw
                 className={`w-4 h-4 ${isRefreshing ? "animate-spin" : ""}`}
               />
               Refresh
             </Button>
-            <Button asChild className="flex-1 md:flex-none gap-2">
-              <a
-                href={stats?.htmlUrl}
-                target="_blank"
-                rel="noopener noreferrer"
+
+            {session ? (
+              <div className="flex items-center gap-2">
+                <Avatar className="w-10 h-10 ring-2 ring-amber-500/20">
+                  <AvatarImage src={session.user.image || ""} />
+                  <AvatarFallback>{session.user.name[0]}</AvatarFallback>
+                </Avatar>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="rounded-xl hover:bg-red-50 dark:hover:bg-red-950/20 text-red-500"
+                  onClick={() => authClient.signOut()}
+                >
+                  <LogOut className="w-5 h-5" />
+                </Button>
+              </div>
+            ) : (
+              <Button
+                asChild
+                className="flex-1 md:flex-none gap-2 bg-zinc-900 dark:bg-zinc-100 rounded-xl"
               >
-                <Github className="w-4 h-4" />
-                Profile
-                <ExternalLink className="w-3 h-3 ml-1 opacity-50" />
-              </a>
-            </Button>
+                <Link href="/login">
+                  <Github className="w-4 h-4" />
+                  Connect
+                </Link>
+              </Button>
+            )}
           </div>
         </div>
 
@@ -381,55 +426,6 @@ export function UserPageClient({ username }: UserPageClientProps) {
           </TabsContent>
 
           <TabsContent value="tracking" className="m-0 space-y-8 outline-none">
-            {/* Quick Stats Summary */}
-            {/* <div className="grid grid-cols-1 md:grid-cols-3 gap-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-              <Card className="border-none bg-gradient-to-br from-red-500/10 to-transparent shadow-none ring-1 ring-red-500/20">
-                <CardContent className="p-6 flex items-center justify-between">
-                  <div className="space-y-1">
-                    <p className="text-sm font-bold text-red-600 dark:text-red-400 uppercase tracking-widest">
-                      Lost
-                    </p>
-                    <p className="text-3xl font-black">{unfollowers.length}</p>
-                  </div>
-                  <div className="p-3 bg-red-500/20 rounded-2xl">
-                    <UserMinus className="w-8 h-8 text-red-600" />
-                  </div>
-                </CardContent>
-              </Card>
-              <Card className="border-none bg-gradient-to-br from-blue-500/10 to-transparent shadow-none ring-1 ring-blue-500/20">
-                <CardContent className="p-6 flex items-center justify-between">
-                  <div className="space-y-1">
-                    <p className="text-sm font-bold text-blue-600 dark:text-blue-400 uppercase tracking-widest">
-                      Gaining
-                    </p>
-                    <p className="text-3xl font-black">{newFollowers.length}</p>
-                  </div>
-                  <div className="p-3 bg-blue-500/20 rounded-2xl">
-                    <UserPlus className="w-8 h-8 text-blue-600" />
-                  </div>
-                </CardContent>
-              </Card>
-              <Card className="border-none bg-gradient-to-br from-yellow-500/10 to-transparent shadow-none ring-1 ring-yellow-500/20">
-                <CardContent className="p-6 flex items-center justify-between">
-                  <div className="space-y-1">
-                    <p className="text-sm font-bold text-yellow-600 dark:text-yellow-400 uppercase tracking-widest">
-                      Unreciprocal
-                    </p>
-                    <p className="text-3xl font-black">
-                      {
-                        following.filter(
-                          (ing) => !followers.some((f) => f.login === ing.login)
-                        ).length
-                      }
-                    </p>
-                  </div>
-                  <div className="p-3 bg-yellow-500/20 rounded-2xl">
-                    <ShieldAlert className="w-8 h-8 text-yellow-600" />
-                  </div>
-                </CardContent>
-              </Card>
-            </div> */}
-
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
               {/* Lost Followers Card - Ultra Premium */}
               <div className="relative group">
@@ -577,20 +573,53 @@ export function UserPageClient({ username }: UserPageClientProps) {
                                   </p>
                                 </div>
                               </div>
-                              <Button
-                                variant="outline"
-                                size="icon"
-                                asChild
-                                className="rounded-xl border-zinc-200 dark:border-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-800 hover:border-blue-500/50 transition-colors"
-                              >
-                                <a
-                                  href={ing.html_url}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
+                              <div className="flex items-center gap-2">
+                                {session && (
+                                  <TooltipProvider>
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <Button
+                                          variant="ghost"
+                                          size="icon"
+                                          onClick={() => {
+                                            if (
+                                              isWhitelisted(username, ing.login)
+                                            ) {
+                                              toast.error(
+                                                "User is Shielded. Remove protection first to unfollow."
+                                              );
+                                              return;
+                                            }
+                                            handleUnfollow(ing.login);
+                                          }}
+                                          className="rounded-xl h-10 w-10 text-red-500/40 hover:text-red-500 hover:bg-red-500/10 transition-all"
+                                        >
+                                          <UserX className="w-5 h-5" />
+                                        </Button>
+                                      </TooltipTrigger>
+                                      <TooltipContent>
+                                        <p className="font-bold">
+                                          Unfollow Authenticated
+                                        </p>
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  </TooltipProvider>
+                                )}
+                                <Button
+                                  variant="outline"
+                                  size="icon"
+                                  asChild
+                                  className="rounded-xl border-zinc-200 dark:border-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
                                 >
-                                  <ExternalLink className="w-4 h-4" />
-                                </a>
-                              </Button>
+                                  <a
+                                    href={ing.html_url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                  >
+                                    <ExternalLink className="w-4 h-4" />
+                                  </a>
+                                </Button>
+                              </div>
                             </div>
                           ))}
                       </div>
