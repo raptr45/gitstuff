@@ -27,6 +27,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { UserGrid } from "@/components/user-grid";
 import { authClient } from "@/lib/auth-client";
 import { useStore } from "@/lib/store";
 import { APIResponse, GitHubUserSummary, UserStats } from "@/lib/types";
@@ -244,7 +245,7 @@ export function UserPageClient({ username }: UserPageClientProps) {
             <div className="absolute -inset-4 bg-primary/20 blur-2xl rounded-full animate-pulse"></div>
             <RefreshCw className="w-10 h-10 animate-spin text-primary relative" />
           </div>
-          <p className="text-xl font-bold tracking-tight animate-pulse bg-gradient-to-r from-primary to-purple-600 bg-clip-text text-transparent">
+          <p className="text-xl font-bold tracking-tight animate-pulse bg-linear-to-r from-primary to-purple-600 bg-clip-text text-transparent">
             Synchronizing GitHub Intelligence...
           </p>
         </div>
@@ -329,7 +330,7 @@ export function UserPageClient({ username }: UserPageClientProps) {
         {/* User Card - Ultra Premium */}
         {stats && (
           <div className="relative group">
-            <div className="absolute -inset-1 bg-gradient-to-r from-primary/30 via-purple-500/30 to-primary/30 rounded-[2.5rem] blur-2xl opacity-20 group-hover:opacity-40 transition duration-1000"></div>
+            <div className="absolute -inset-1 bg-linear-to-r from-primary/30 via-purple-500/30 to-primary/30 rounded-[2.5rem] blur-2xl opacity-20 group-hover:opacity-40 transition duration-1000"></div>
             <Card className="relative overflow-hidden border-none shadow-2xl bg-white/70 dark:bg-zinc-950/70 backdrop-blur-3xl rounded-[2.5rem] px-2 py-4">
               <div className="absolute top-0 right-0 w-64 h-64 bg-primary/5 blur-[80px] rounded-full -mr-20 -mt-20"></div>
               <div className="absolute bottom-0 left-0 w-64 h-64 bg-purple-500/5 blur-[80px] rounded-full -ml-20 -mb-20"></div>
@@ -337,7 +338,7 @@ export function UserPageClient({ username }: UserPageClientProps) {
               <CardHeader className="pb-6 relative z-10">
                 <div className="flex flex-col md:flex-row items-center gap-8 px-4">
                   <div className="relative">
-                    <div className="absolute -inset-1 bg-gradient-to-tr from-primary to-purple-500 rounded-full blur opacity-40 animate-pulse"></div>
+                    <div className="absolute -inset-1 bg-linear-to-tr from-primary to-purple-500 rounded-full blur opacity-40 animate-pulse"></div>
                     <Avatar className="w-40 h-40 border-4 border-white dark:border-zinc-900 shadow-2xl relative">
                       <AvatarImage src={stats.avatarUrl} alt={stats.username} />
                       <AvatarFallback className="text-5xl font-black bg-muted">
@@ -349,7 +350,7 @@ export function UserPageClient({ username }: UserPageClientProps) {
                   <div className="flex-1 text-center md:text-left space-y-4">
                     <div className="space-y-1">
                       <div className="flex flex-col md:flex-row items-center gap-3">
-                        <CardTitle className="text-5xl font-black tracking-tighter bg-gradient-to-br from-zinc-900 via-zinc-800 to-zinc-500 dark:from-white dark:via-zinc-200 dark:to-zinc-500 bg-clip-text text-transparent">
+                        <CardTitle className="text-5xl font-black tracking-tighter bg-linear-to-br from-zinc-900 via-zinc-800 to-zinc-500 dark:from-white dark:via-zinc-200 dark:to-zinc-500 bg-clip-text text-transparent">
                           {stats.name || stats.username}
                         </CardTitle>
                         <Badge
@@ -479,7 +480,7 @@ export function UserPageClient({ username }: UserPageClientProps) {
               </div>
             )}
 
-            <UserListTable
+            <UserGrid
               users={filteredFollowers}
               onToggleWhitelist={handleToggleWhitelist}
               whitelist={whitelist}
@@ -488,7 +489,7 @@ export function UserPageClient({ username }: UserPageClientProps) {
           </TabsContent>
 
           <TabsContent value="following" className="m-0 space-y-6">
-            <UserListTable
+            <UserGrid
               users={filteredFollowing}
               onToggleWhitelist={handleToggleWhitelist}
               whitelist={whitelist}
@@ -501,7 +502,7 @@ export function UserPageClient({ username }: UserPageClientProps) {
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
               {/* Lost Followers Card - Ultra Premium */}
               <div className="relative group">
-                <div className="absolute -inset-0.5 bg-gradient-to-r from-red-600 to-pink-600 rounded-[2rem] blur opacity-10 group-hover:opacity-20 transition duration-1000 group-hover:duration-200"></div>
+                <div className="absolute -inset-0.5 bg-linear-to-r from-red-600 to-pink-600 rounded-[2rem] blur opacity-10 group-hover:opacity-20 transition duration-1000 group-hover:duration-200"></div>
                 <Card className="relative border-none shadow-2xl bg-white/80 dark:bg-zinc-950/80 backdrop-blur-3xl rounded-[2rem] overflow-hidden">
                   <div className="absolute top-0 right-0 w-32 h-32 bg-red-500/10 blur-[60px] rounded-full -mr-10 -mt-10 animate-pulse"></div>
                   <CardHeader className="border-b border-zinc-500/10 pb-6 relative z-10">
@@ -511,7 +512,7 @@ export function UserPageClient({ username }: UserPageClientProps) {
                           <div className="p-2.5 bg-red-600 rounded-xl shadow-[0_0_20px_rgba(220,38,38,0.3)]">
                             <UserMinus className="w-5 h-5 text-white" />
                           </div>
-                          <CardTitle className="text-2xl font-black tracking-tight bg-gradient-to-br from-red-600 to-red-400 bg-clip-text text-transparent">
+                          <CardTitle className="text-2xl font-black tracking-tight bg-linear-to-br from-red-600 to-red-400 bg-clip-text text-transparent">
                             Lost Followers
                           </CardTitle>
                         </div>
@@ -527,7 +528,7 @@ export function UserPageClient({ username }: UserPageClientProps) {
                         <div className="p-24 text-center flex flex-col items-center justify-center gap-6">
                           <div className="relative">
                             <div className="absolute -inset-4 bg-green-500/20 blur-xl rounded-full"></div>
-                            <div className="relative w-20 h-20 rounded-3xl bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center shadow-lg">
+                            <div className="relative w-20 h-20 rounded-3xl bg-linear-to-br from-green-500 to-emerald-600 flex items-center justify-center shadow-lg">
                               <ShieldCheck className="w-10 h-10 text-white" />
                             </div>
                           </div>
@@ -546,7 +547,7 @@ export function UserPageClient({ username }: UserPageClientProps) {
                           {unfollowers.map((f) => (
                             <div
                               key={`lost-${f.login}`}
-                              className="p-4 flex items-center justify-between rounded-2xl bg-zinc-500/5 hover:bg-red-500/[0.03] ring-1 ring-zinc-500/10 hover:ring-red-500/20 transition-all duration-300 group/item"
+                              className="p-4 flex items-center justify-between rounded-2xl bg-zinc-500/5 hover:bg-red-500/3 ring-1 ring-zinc-500/10 hover:ring-red-500/20 transition-all duration-300 group/item"
                             >
                               <div className="flex items-center gap-4">
                                 <div className="relative">
@@ -596,7 +597,7 @@ export function UserPageClient({ username }: UserPageClientProps) {
 
               {/* Potential Unfollows Card - Ultra Premium */}
               <div className="relative group">
-                <div className="absolute -inset-0.5 bg-gradient-to-r from-blue-600 to-cyan-600 rounded-[2rem] blur opacity-10 group-hover:opacity-20 transition duration-1000 group-hover:duration-200"></div>
+                <div className="absolute -inset-0.5 bg-linear-to-r from-blue-600 to-cyan-600 rounded-[2rem] blur opacity-10 group-hover:opacity-20 transition duration-1000 group-hover:duration-200"></div>
                 <Card className="relative border-none shadow-2xl bg-white/80 dark:bg-zinc-950/80 backdrop-blur-3xl rounded-[2rem] overflow-hidden">
                   <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/10 blur-[60px] rounded-full -mr-10 -mt-10 animate-pulse"></div>
                   <CardHeader className="border-b border-zinc-500/10 pb-6 relative z-10">
@@ -606,7 +607,7 @@ export function UserPageClient({ username }: UserPageClientProps) {
                           <div className="p-2.5 bg-blue-600 rounded-xl shadow-[0_0_20px_rgba(37,99,235,0.3)]">
                             <ShieldAlert className="w-5 h-5 text-white" />
                           </div>
-                          <CardTitle className="text-2xl font-black tracking-tight bg-gradient-to-br from-blue-600 to-blue-400 bg-clip-text text-transparent">
+                          <CardTitle className="text-2xl font-black tracking-tight bg-linear-to-br from-blue-600 to-blue-400 bg-clip-text text-transparent">
                             Potential Unfollows
                           </CardTitle>
                         </div>
@@ -627,7 +628,7 @@ export function UserPageClient({ username }: UserPageClientProps) {
                           .map((ing) => (
                             <div
                               key={`potential-${ing.login}`}
-                              className="p-4 flex items-center justify-between rounded-2xl bg-zinc-500/5 hover:bg-blue-500/[0.03] ring-1 ring-zinc-500/10 hover:ring-blue-500/20 transition-all duration-300 group/item"
+                              className="p-4 flex items-center justify-between rounded-2xl bg-zinc-500/5 hover:bg-blue-500/3 ring-1 ring-zinc-500/10 hover:ring-blue-500/20 transition-all duration-300 group/item"
                             >
                               <div className="flex items-center gap-4">
                                 <Avatar className="w-14 h-14 ring-2 ring-white dark:ring-zinc-900 shadow-xl transition-transform group-hover/item:scale-105">
@@ -704,7 +705,7 @@ export function UserPageClient({ username }: UserPageClientProps) {
 
           <TabsContent value="whitelist" className="m-0 space-y-6">
             <div className="relative group">
-              <div className="absolute -inset-0.5 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-[2rem] blur opacity-10"></div>
+              <div className="absolute -inset-0.5 bg-linear-to-r from-blue-600 to-indigo-600 rounded-[2rem] blur opacity-10"></div>
               <Card className="relative border-none shadow-2xl bg-white/80 dark:bg-zinc-950/80 backdrop-blur-3xl rounded-[2rem] overflow-hidden">
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 px-8 py-10 border-b border-zinc-500/10">
                   <div className="space-y-1">
@@ -847,168 +848,3 @@ export function UserPageClient({ username }: UserPageClientProps) {
   );
 }
 
-export function UserListTable({
-  users,
-  onToggleWhitelist,
-  whitelist,
-  showFollowBackStatus,
-  isLoading,
-}: {
-  users: GitHubUserSummary[];
-  onToggleWhitelist: (login: string) => void | Promise<void>;
-  whitelist: string[];
-  showFollowBackStatus?: GitHubUserSummary[];
-  isLoading?: boolean;
-}) {
-  return (
-    <Card className="border-none shadow-2xl bg-white/50 dark:bg-zinc-900/50 backdrop-blur-xl ring-1 ring-zinc-500/10 rounded-[2rem] overflow-hidden">
-      <CardContent className="p-0">
-        <ScrollArea className="h-[600px]">
-          <Table>
-            <TableHeader className="bg-zinc-500/5 sticky top-0 z-10 backdrop-blur-md">
-              <TableRow className="hover:bg-transparent border-zinc-500/10">
-                <TableHead className="w-[350px] h-14 px-8 text-xs font-black uppercase tracking-widest text-zinc-400">
-                  GitHub Identity
-                </TableHead>
-                <TableHead className="h-14 text-xs font-black uppercase tracking-widest text-zinc-400">
-                  Connection Integrity
-                </TableHead>
-                <TableHead className="text-right h-14 px-8 text-xs font-black uppercase tracking-widest text-zinc-400">
-                  Security
-                </TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {isLoading ? (
-                Array.from({ length: 5 }).map((_, i) => (
-                  <TableRow key={`skeleton-${i}`} className="border-zinc-500/5">
-                    <TableCell className="px-8 py-4">
-                      <div className="flex items-center gap-4">
-                        <div className="w-12 h-12 rounded-full bg-muted animate-pulse" />
-                        <div className="space-y-2">
-                          <div className="h-4 w-32 bg-muted animate-pulse rounded" />
-                          <div className="h-2 w-20 bg-muted animate-pulse rounded" />
-                        </div>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="h-6 w-24 bg-muted animate-pulse rounded-full" />
-                    </TableCell>
-                    <TableCell className="text-right px-8">
-                      <div className="inline-block w-10 h-10 bg-muted animate-pulse rounded-xl" />
-                    </TableCell>
-                  </TableRow>
-                ))
-              ) : users.length === 0 ? (
-                <TableRow>
-                  <TableCell
-                    colSpan={3}
-                    className="h-32 text-center text-zinc-500 font-bold"
-                  >
-                    No matching identities discovered in the current scope.
-                  </TableCell>
-                </TableRow>
-              ) : (
-                users.map((user) => {
-                  const isWl = whitelist.includes(user.login);
-                  const followsBack = showFollowBackStatus?.some(
-                    (f) => f.login === user.login
-                  );
-
-                  return (
-                    <TableRow
-                      key={user.login}
-                      className="group border-zinc-500/5 hover:bg-primary/[0.02] transition-colors"
-                    >
-                      <TableCell className="px-8 py-4">
-                        <div className="flex items-center gap-4">
-                          <Avatar className="w-12 h-12 ring-2 ring-white dark:ring-zinc-900 shadow-md transition-transform group-hover:scale-105">
-                            <AvatarImage src={user.avatar_url} />
-                            <AvatarFallback className="font-black text-sm">
-                              {user.login[0]}
-                            </AvatarFallback>
-                          </Avatar>
-                          <div className="flex flex-col">
-                            <a
-                              href={user.html_url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="font-black text-lg hover:underline decoration-primary/30 flex items-center gap-1 group/link"
-                            >
-                              @{user.login}
-                              <ExternalLink className="w-3 h-3 opacity-0 group-hover/link:opacity-100 transition-opacity" />
-                            </a>
-                            <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider">
-                              GitHub Member
-                            </p>
-                          </div>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex flex-wrap gap-2">
-                          {isWl && (
-                            <Badge
-                              variant="secondary"
-                              className="bg-blue-500/10 text-blue-600 border-none font-black text-[9px] uppercase tracking-tighter"
-                            >
-                              Shielded
-                            </Badge>
-                          )}
-                          {showFollowBackStatus &&
-                            (followsBack ? (
-                              <Badge
-                                variant="secondary"
-                                className="bg-emerald-500/10 text-emerald-600 border-none font-black text-[9px] uppercase tracking-tighter"
-                              >
-                                Mutually Gaining
-                              </Badge>
-                            ) : (
-                              <Badge
-                                variant="secondary"
-                                className="bg-amber-500/10 text-amber-600 border-none font-black text-[9px] uppercase tracking-tighter"
-                              >
-                                Non-Reciprocal
-                              </Badge>
-                            ))}
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-right px-8">
-                        <TooltipProvider>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => onToggleWhitelist(user.login)}
-                                className={`rounded-xl h-10 w-10 transition-all ${
-                                  isWl
-                                    ? "bg-blue-500/10 text-blue-600"
-                                    : "text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800"
-                                }`}
-                              >
-                                {isWl ? (
-                                  <ShieldCheck className="w-5 h-5" />
-                                ) : (
-                                  <ShieldAlert className="w-5 h-5 opacity-40 group-hover:opacity-100" />
-                                )}
-                              </Button>
-                            </TooltipTrigger>
-                            <TooltipContent>
-                              {isWl
-                                ? "Remove from Shielded List"
-                                : "Add to Shielded List"}
-                            </TooltipContent>
-                          </Tooltip>
-                        </TooltipProvider>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })
-              )}
-            </TableBody>
-          </Table>
-        </ScrollArea>
-      </CardContent>
-    </Card>
-  );
-}
