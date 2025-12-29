@@ -1,10 +1,10 @@
-import { CacheEntry, CacheManager as ICacheManager } from './types';
+import { CacheEntry, CacheManager as ICacheManager } from "./types";
 
 /**
  * In-memory cache manager with timestamp-based expiration
  */
 export class CacheManager implements ICacheManager {
-  private cache: Map<string, CacheEntry<any>>;
+  private cache: Map<string, CacheEntry<unknown>>;
 
   constructor() {
     this.cache = new Map();
@@ -28,7 +28,7 @@ export class CacheManager implements ICacheManager {
    */
   get<T>(key: string): T | null {
     const entry = this.cache.get(key);
-    
+
     if (!entry) {
       return null;
     }
@@ -53,7 +53,7 @@ export class CacheManager implements ICacheManager {
    */
   isExpired(key: string): boolean {
     const entry = this.cache.get(key);
-    
+
     if (!entry) {
       return true;
     }

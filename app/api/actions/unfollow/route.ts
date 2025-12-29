@@ -11,12 +11,30 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const { targetUsername } = await req.json();
+  const { targetUsername: userToUnfollow } = await req.json();
 
-  if (!targetUsername) {
+  if (!userToUnfollow) {
     return NextResponse.json(
       { error: "Target username is required" },
       { status: 400 }
+    );
+  }
+
+  // Check if this user is protected (Shielded/Whitelisted)
+  // We need to know which profile we are looking at.
+  // Let's assume the request passes the 'profileOwner' as well, or we infer it.
+  // For now, let's check if the userToUnfollow is whitelisted for ANY profile owned by the user.
+  const isProtected = await prisma.whitelist.findFirst({
+    where: {
+      userId: session.user.id,
+      whiteListed: userToUnfollow,
+    },
+  });
+
+  if (isProtected) {
+    return NextResponse.json(
+      { error: "User is Shielded. Remove protection first to unfollow." },
+      { status: 403 }
     );
   }
 
@@ -37,7 +55,7 @@ export async function POST(req: Request) {
 
   try {
     const response = await fetch(
-      `https://api.github.com/user/following/${targetUsername}`,
+      `https://api.github.com/user/following/${userToUnfollow}`,
       {
         method: "DELETE",
         headers: {

@@ -52,68 +52,113 @@ interface UserPageClientProps {
 }
 
 export function UserPageClient({ username }: UserPageClientProps) {
-  const { whitelists, toggleWhitelist, saveFollowerState, isWhitelisted } =
-    useStore();
+  const {
+    whitelists,
+    toggleWhitelist,
+    saveFollowerState,
+    isWhitelisted,
+    setWhitelists,
+  } = useStore();
 
   const [stats, setStats] = useState<UserStats | null>(null);
   const [followers, setFollowers] = useState<GitHubUserSummary[]>([]);
   const [following, setFollowing] = useState<GitHubUserSummary[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState("");
+
+  const [loadingStates, setLoadingStates] = useState({
+    stats: true,
+    followers: true,
+    following: true,
+    whitelist: true,
+  });
+
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [searchQuery, setSearchQuery] = useState("");
 
   const [newFollowers, setNewFollowers] = useState<GitHubUserSummary[]>([]);
   const [unfollowers, setUnfollowers] = useState<GitHubUserSummary[]>([]);
 
-  const fetchAllData = useCallback(
+  const fetchStats = useCallback(
     async (refresh = false) => {
-      if (refresh) setIsRefreshing(true);
-      else setIsLoading(true);
-      setError(null);
-
       try {
-        // Fetch stats
         const statsRes = await fetch(
           `/api/stats/${username}${refresh ? "?refresh=true" : ""}`
         );
         const statsData: APIResponse<UserStats> = await statsRes.json();
-
-        if (!statsData.success) throw new Error(statsData.error);
-        setStats(statsData.data);
-
-        // Fetch lists
-        const [fRes, ingRes] = await Promise.all([
-          fetch(`/api/users/${username}/list?type=followers`),
-          fetch(`/api/users/${username}/list?type=following`),
-        ]);
-
-        const fData: APIResponse<GitHubUserSummary[]> = await fRes.json();
-        const ingData: APIResponse<GitHubUserSummary[]> = await ingRes.json();
-
-        if (fData.success) {
-          setFollowers(fData.data);
-          const diff = saveFollowerState(username, fData.data);
-          setNewFollowers(diff.newFollowers);
-          setUnfollowers(diff.unfollowers);
-        }
-
-        if (ingData.success) {
-          setFollowing(ingData.data);
-        }
-
-        if (refresh) toast.success("Data refreshed successfully");
-      } catch (err: unknown) {
-        const message =
-          err instanceof Error ? err.message : "Failed to fetch data";
-        setError(message);
-        toast.error("Failed to update: " + message);
+        if (statsData.success) setStats(statsData.data);
+      } catch (err) {
+        console.error("Failed to fetch stats", err);
       } finally {
-        setIsLoading(false);
-        setIsRefreshing(false);
+        setLoadingStates((prev) => ({ ...prev, stats: false }));
       }
     },
-    [username, saveFollowerState]
+    [username]
+  );
+
+  const fetchLists = useCallback(async () => {
+    try {
+      const [fRes, ingRes] = await Promise.all([
+        fetch(`/api/users/${username}/list?type=followers`),
+        fetch(`/api/users/${username}/list?type=following`),
+      ]);
+
+      const fData: APIResponse<GitHubUserSummary[]> = await fRes.json();
+      const ingData: APIResponse<GitHubUserSummary[]> = await ingRes.json();
+
+      if (fData.success) {
+        setFollowers(fData.data);
+        const diff = saveFollowerState(username, fData.data);
+        setNewFollowers(diff.newFollowers);
+        setUnfollowers(diff.unfollowers);
+      }
+
+      if (ingData.success) {
+        setFollowing(ingData.data);
+      }
+    } catch (err) {
+      console.error("Failed to fetch lists", err);
+    } finally {
+      setLoadingStates((prev) => ({
+        ...prev,
+        followers: false,
+        following: false,
+      }));
+    }
+  }, [username, saveFollowerState]);
+
+  const fetchWhitelist = useCallback(async () => {
+    try {
+      const res = await fetch(
+        `/api/actions/whitelist?targetUsername=${username}`
+      );
+      const data = await res.json();
+      if (data.success) {
+        // Transform user-specific whitelist to the store's expected format
+        const logins = data.data.map(
+          (w: { whiteListed: string }) => w.whiteListed
+        );
+        setWhitelists({ ...whitelists, [username]: logins });
+      }
+    } catch (err) {
+      console.error("Failed to fetch whitelist", err);
+    } finally {
+      setLoadingStates((prev) => ({ ...prev, whitelist: false }));
+    }
+  }, [username, setWhitelists, whitelists]);
+
+  const fetchAllData = useCallback(
+    async (refresh = false) => {
+      if (refresh) setIsRefreshing(true);
+      setError(null);
+
+      await Promise.all([fetchStats(refresh), fetchLists(), fetchWhitelist()]);
+
+      if (refresh) {
+        setIsRefreshing(false);
+        toast.success("Data refreshed successfully");
+      }
+    },
+    [fetchStats, fetchLists, fetchWhitelist]
   );
 
   const { data: session } = authClient.useSession();
@@ -130,8 +175,7 @@ export function UserPageClient({ username }: UserPageClientProps) {
         const data = await res.json();
         if (data.success) {
           toast.success(`Succesfully unfollowed @${targetLogin}`);
-          // Optionally refresh data to reflect changes
-          fetchAllData(true);
+          fetchLists(); // Only refresh lists, not full page
         } else {
           toast.error(data.error || "Failed to unfollow");
         }
@@ -139,7 +183,32 @@ export function UserPageClient({ username }: UserPageClientProps) {
         toast.error("An error occurred while trying to unfollow");
       }
     },
-    [fetchAllData]
+    [fetchLists]
+  );
+
+  const handleToggleWhitelist = useCallback(
+    async (login: string) => {
+      try {
+        const res = await fetch("/api/actions/whitelist", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            targetUsername: username,
+            login,
+            action: "toggle",
+          }),
+        });
+        const data = await res.json();
+        if (data.success) {
+          toggleWhitelist(username, login);
+        } else {
+          toast.error(data.error || "Failed to update protection");
+        }
+      } catch {
+        toast.error("Failed to update protection");
+      }
+    },
+    [username, toggleWhitelist]
   );
 
   useEffect(() => {
@@ -167,13 +236,16 @@ export function UserPageClient({ username }: UserPageClientProps) {
     [whitelists, username]
   );
 
-  if (isLoading && !stats) {
+  if (loadingStates.stats && !stats) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="flex flex-col items-center gap-4">
-          <RefreshCw className="w-8 h-8 animate-spin text-primary" />
-          <p className="text-muted-foreground animate-pulse">
-            Loading GitHub stats...
+          <div className="relative">
+            <div className="absolute -inset-4 bg-primary/20 blur-2xl rounded-full animate-pulse"></div>
+            <RefreshCw className="w-10 h-10 animate-spin text-primary relative" />
+          </div>
+          <p className="text-xl font-bold tracking-tight animate-pulse bg-gradient-to-r from-primary to-purple-600 bg-clip-text text-transparent">
+            Synchronizing GitHub Intelligence...
           </p>
         </div>
       </div>
@@ -409,19 +481,19 @@ export function UserPageClient({ username }: UserPageClientProps) {
 
             <UserListTable
               users={filteredFollowers}
-              target={username}
-              onToggleWhitelist={(login) => toggleWhitelist(username, login)}
+              onToggleWhitelist={handleToggleWhitelist}
               whitelist={whitelist}
+              isLoading={loadingStates.followers}
             />
           </TabsContent>
 
           <TabsContent value="following" className="m-0 space-y-6">
             <UserListTable
               users={filteredFollowing}
-              target={username}
-              onToggleWhitelist={(login) => toggleWhitelist(username, login)}
+              onToggleWhitelist={handleToggleWhitelist}
               whitelist={whitelist}
               showFollowBackStatus={followers}
+              isLoading={loadingStates.following}
             />
           </TabsContent>
 
@@ -724,9 +796,7 @@ export function UserPageClient({ username }: UserPageClientProps) {
                                   variant="ghost"
                                   size="sm"
                                   className="text-red-500 h-10 px-4 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-xl font-bold"
-                                  onClick={() =>
-                                    toggleWhitelist(username, login)
-                                  }
+                                  onClick={() => handleToggleWhitelist(login)}
                                 >
                                   Remove from Protection
                                 </Button>
@@ -777,17 +847,18 @@ export function UserPageClient({ username }: UserPageClientProps) {
   );
 }
 
-function UserListTable({
+export function UserListTable({
   users,
   onToggleWhitelist,
   whitelist,
   showFollowBackStatus,
+  isLoading,
 }: {
   users: GitHubUserSummary[];
-  target: string;
-  onToggleWhitelist: (login: string) => void;
+  onToggleWhitelist: (login: string) => void | Promise<void>;
   whitelist: string[];
   showFollowBackStatus?: GitHubUserSummary[];
+  isLoading?: boolean;
 }) {
   return (
     <Card className="border-none shadow-2xl bg-white/50 dark:bg-zinc-900/50 backdrop-blur-xl ring-1 ring-zinc-500/10 rounded-[2rem] overflow-hidden">
@@ -808,7 +879,27 @@ function UserListTable({
               </TableRow>
             </TableHeader>
             <TableBody>
-              {users.length === 0 ? (
+              {isLoading ? (
+                Array.from({ length: 5 }).map((_, i) => (
+                  <TableRow key={`skeleton-${i}`} className="border-zinc-500/5">
+                    <TableCell className="px-8 py-4">
+                      <div className="flex items-center gap-4">
+                        <div className="w-12 h-12 rounded-full bg-muted animate-pulse" />
+                        <div className="space-y-2">
+                          <div className="h-4 w-32 bg-muted animate-pulse rounded" />
+                          <div className="h-2 w-20 bg-muted animate-pulse rounded" />
+                        </div>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="h-6 w-24 bg-muted animate-pulse rounded-full" />
+                    </TableCell>
+                    <TableCell className="text-right px-8">
+                      <div className="inline-block w-10 h-10 bg-muted animate-pulse rounded-xl" />
+                    </TableCell>
+                  </TableRow>
+                ))
+              ) : users.length === 0 ? (
                 <TableRow>
                   <TableCell
                     colSpan={3}

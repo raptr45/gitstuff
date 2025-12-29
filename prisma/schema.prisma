@@ -15,8 +15,21 @@ model User {
   updatedAt     DateTime
   sessions      Session[]
   accounts      Account[]
+  whitelists    Whitelist[]
 
   @@map("user")
+}
+
+model Whitelist {
+  id             String @id @default(cuid())
+  userId         String
+  user           User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  targetUsername String
+  whiteListed    String
+  createdAt      DateTime @default(now())
+
+  @@unique([userId, targetUsername, whiteListed])
+  @@map("whitelist")
 }
 
 model Session {
