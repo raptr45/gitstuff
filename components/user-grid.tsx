@@ -1,5 +1,7 @@
 "use client";
 
+import { useCallback, useState } from "react";
+
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -27,6 +29,15 @@ export function UserGrid({
   showFollowBackStatus,
   isLoading,
 }: UserGridProps) {
+  const [visibleCount, setVisibleCount] = useState(20);
+
+  const handleLoadMore = useCallback(() => {
+    setVisibleCount((prev) => prev + 20);
+  }, []);
+
+  const visibleUsers = users.slice(0, visibleCount);
+  const hasMore = visibleUsers.length < users.length;
+
   if (isLoading) {
     return (
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -57,8 +68,9 @@ export function UserGrid({
   }
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-      {users.map((user) => {
+    <div className="space-y-8">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {visibleUsers.map((user) => {
         const isWl = whitelist.includes(user.login);
         const followsBack = showFollowBackStatus?.some(
           (f) => f.login === user.login
@@ -154,7 +166,20 @@ export function UserGrid({
             </div>
           </div>
         );
-      })}
+        })}
+      </div>
+
+      {hasMore && (
+        <div className="flex justify-center pt-4 pb-8">
+          <Button
+            variant="outline"
+            onClick={handleLoadMore}
+            className="rounded-full px-8 h-12 bg-white/50 dark:bg-zinc-900/50 backdrop-blur-md border-zinc-200 dark:border-zinc-800 hover:bg-white/80 dark:hover:bg-zinc-800 transition-all font-bold text-zinc-600 dark:text-zinc-300"
+          >
+            Load More Identities ({users.length - visibleCount} remaining)
+          </Button>
+        </div>
+      )}
     </div>
   );
 }
