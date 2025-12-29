@@ -23,17 +23,10 @@ export async function DELETE() {
     // However, Whitelist and Snapshot are related by 'username' string in this schema design (not optimal foreign key but it is what it is).
     // Let's check schema via Prisma Client usage or assuming it's By Username string.
     
-    // In current schema, Whitelist and Snapshot use `username` string.
-    const targetUsername = user.username;
-
     await prisma.$transaction([
       // Delete Whitelists
       prisma.whitelist.deleteMany({
-        where: { username: targetUsername },
-      }),
-      // Delete Snapshots
-      prisma.snapshot.deleteMany({
-        where: { username: targetUsername },
+        where: { userId },
       }),
     ]);
 

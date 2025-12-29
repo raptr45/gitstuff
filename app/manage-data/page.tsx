@@ -9,6 +9,7 @@ import {
     CardTitle,
 } from "@/components/ui/card";
 import { authClient } from "@/lib/auth-client";
+import { useStore } from "@/lib/store"; // Import store
 import { AlertTriangle, Database, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -17,6 +18,7 @@ import { toast } from "sonner";
 export default function ManageData() {
   const router = useRouter();
   const { data: session } = authClient.useSession();
+  const { setWhitelists, saveFollowerState } = useStore(); // Get store actions
   const [isDeleting, setIsDeleting] = useState(false);
 
   const handleDeleteData = async () => {
@@ -28,14 +30,17 @@ export default function ManageData() {
     try {
       const res = await fetch("/api/user/data", { method: "DELETE" });
       if (res.ok) {
+        // Clear client-side state
+        useStore.persist.clearStorage(); 
+        // Force reload to reset state in memory immediately
+        window.location.href = "/";
         toast.success("Data deleted successfully");
-        router.push("/");
       } else {
         toast.error("Failed to delete data");
+        setIsDeleting(false);
       }
     } catch {
       toast.error("An error occurred");
-    } finally {
       setIsDeleting(false);
     }
   };
