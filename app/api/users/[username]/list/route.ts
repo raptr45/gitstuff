@@ -38,10 +38,30 @@ export async function GET(
       );
     }
 
+    // Get authenticated user's GitHub username for optimized endpoints
+    let authenticatedUsername: string | undefined;
+    if (session) {
+      const user = await prisma.user.findUnique({
+        where: { id: session.user.id },
+      });
+      authenticatedUsername = user?.username || undefined;
+    }
+
+    const forceRefresh = request.nextUrl.searchParams.get("refresh") === "true";
     const data =
       type === "following"
-        ? await followerService.getFollowingList(username, token)
-        : await followerService.getFollowersList(username, token);
+        ? await followerService.getFollowingList(
+            username,
+            token,
+            forceRefresh,
+            authenticatedUsername
+          )
+        : await followerService.getFollowersList(
+            username,
+            token,
+            forceRefresh,
+            authenticatedUsername
+          );
 
     return NextResponse.json({ success: true, data });
   } catch (error) {
