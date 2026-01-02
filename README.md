@@ -1,23 +1,21 @@
 # GitStuff 🐱
 
-**GitStuff** is a powerful yet simple tool to track your GitHub followers. It helps you identify who unfollowed you, track new followers, and manage your social circle on GitHub with ease.
+**GitStuff** is a easy GitHub follower management tool. Identify unfollowers, track growth, and protect your social circle.
 
 ## ✨ Features
 
-- **Follower Tracking**: Instantly see who unfollowed you and who followed you back since your last visit.
-- **Whitelisting**: Mark specific users as "safe" to prevent them from appearing in your unfollow lists (e.g., bots or friends).
-- **Smart Sync**: Automatically keeps your profile data in sync with GitHub.
-- **Privacy First**: All history tracking is local or user-controlled. You can delete all your data with one click.
-- **Dark Mode**: Fully supported dark/light themes for a comfortable viewing experience.
+- **Follower Tracking**: See who unfollowed you or followed you back instantly.
+- **Whitelist (Shield)**: Protect specific users from being flagged as "unfollowed".
+- **Supporter Tier**: Unlock unlimited whitelists and advanced tracking.
+- **Privacy First**: Your data stays yours, synced via Better Auth & PostgreSQL.
 
 ## 🛠️ Tech Stack
 
-- **Framework**: [Next.js 16](https://nextjs.org/) (App Router)
-- **Language**: TypeScript
-- **Styling**: [Tailwind CSS 4](https://tailwindcss.com/) & [shadcn/ui](https://ui.shadcn.com/)
-- **Database**: PostgreSQL (via [Prisma](https://www.prisma.io/))
-- **Authentication**: [better-auth](https://better-auth.com/) (GitHub OAuth)
-- **State Management**: [Zustand](https://zustand-demo.pmnd.rs/) with persistence
+- **Framework**: Next.js 16 (Turbopack)
+- **Database**: PostgreSQL + Prisma
+- **Auth**: Better Auth (GitHub OAuth)
+- **State**: Zustand with Persistence
+- **UI**: Tailwind CSS 4 + shadcn/ui
 
 ## 🚀 Getting Started
 
@@ -29,47 +27,41 @@
 
 ### Installation
 
-1.  **Clone the repository:**
-    ```bash
-    git clone https://github.com/yourusername/gitstuff.git
-    cd gitstuff
-    ```
+1. **Clone the repository:**
 
-2.  **Install dependencies:**
-    ```bash
-    pnpm install
-    ```
+   ```bash
+   git clone https://github.com/raptr45/gitstuff.git
+   cd gitstuff
+   ```
 
-3.  **Set up environment variables:**
-    Create a `.env` file in the root directory:
-    ```env
-    DATABASE_URL="postgresql://..."
-    GITHUB_CLIENT_ID="your_client_id"
-    GITHUB_CLIENT_SECRET="your_client_secret"
-    BETTER_AUTH_SECRET="your_auth_secret"
-    BETTER_AUTH_URL="http://localhost:3000"
-    ```
+2. **Install dependencies:**
 
-4.  **Initialize the database:**
-    ```bash
-    pnpm prisma generate
-    pnpm prisma db push
-    ```
+   ```bash
+   pnpm install
+   ```
 
-5.  **Run the development server:**
-    ```bash
-    pnpm dev
-    ```
+3. **Set up environment variables:**
+   Create a `.env` file with the following:
 
-    Open [http://localhost:3000](http://localhost:3000) to see the app.
+   ```env
+   DATABASE_URL=postgresql://...
+   GITHUB_CLIENT_ID=your_id
+   GITHUB_CLIENT_SECRET=your_secret
+   BETTER_AUTH_SECRET=your_secret
+   BETTER_AUTH_URL=http://localhost:3000
+   NEXT_PUBLIC_BASE_URL=http://localhost:3000
+   ```
 
-## 🧪 Running Tests
+4. **Initialize database:**
 
-Run the test suite using Vitest:
+   ```bash
+   pnpm prisma migrate dev
+   ```
 
-```bash
-pnpm test
-```
+5. **Run development server:**
+   ```bash
+   pnpm dev
+   ```
 
 ## 📄 License
 
