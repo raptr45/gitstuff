@@ -25,7 +25,12 @@ import { UserGrid } from "@/components/user-grid";
 import { authClient } from "@/lib/auth-client";
 import { useStore, type GitHubUserWithTimestamp } from "@/lib/store";
 import { getTierLimit } from "@/lib/tier-limits";
-import { APIResponse, GitHubUserSummary, Plan, UserStats } from "@/lib/types";
+import {
+  APIResponse,
+  AppUser,
+  GitHubUserSummary,
+  UserStats,
+} from "@/lib/types";
 import {
   BookMarked,
   RefreshCw,
@@ -182,7 +187,7 @@ export function UserPageClient({ username }: UserPageClientProps) {
 
   useEffect(() => {
     if (session?.user) {
-      setPlan(((session.user as any).plan as Plan) || "FREE");
+      setPlan((session.user as AppUser).plan || "FREE");
     }
   }, [session, setPlan]);
 

@@ -7,6 +7,18 @@
  */
 export type Plan = "FREE" | "PRO";
 
+export interface AppUser {
+  id: string;
+  email: string;
+  emailVerified: boolean;
+  name: string;
+  image?: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+  username?: string | null;
+  plan?: Plan;
+}
+
 export interface GitHubUser {
   login: string;
   followers: number;

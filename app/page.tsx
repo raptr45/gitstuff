@@ -2,6 +2,7 @@
 
 import { UserPageClient } from "@/components/user-page-client";
 import { authClient } from "@/lib/auth-client";
+import { AppUser } from "@/lib/types";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
@@ -23,11 +24,7 @@ export default function Home() {
     const checkAndSync = async () => {
       if (!session?.user) return;
 
-      const user = session.user as {
-        username?: string;
-        name?: string;
-        id: string;
-      };
+      const user = session.user as AppUser;
 
       // If we already have it in session, great.
       if (user.username) {
@@ -78,9 +75,7 @@ export default function Home() {
   // so we really depend on syncedUsername being correct now).
   // If sync failed, we might still be stuck, but this covers 99% of cases.
   const finalUsername =
-    syncedUsername ||
-    (session.user as any).username ||
-    (session.user as any).name;
+    syncedUsername || (session.user as AppUser).username || session.user.name;
 
   return <UserPageClient username={finalUsername} />;
 }

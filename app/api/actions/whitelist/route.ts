@@ -1,7 +1,7 @@
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getTierLimit } from "@/lib/tier-limits";
-import { Plan } from "@/lib/types";
+import { AppUser } from "@/lib/types";
 import { NextResponse } from "next/server";
 
 export async function GET(req: Request) {
@@ -68,7 +68,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ success: true, whitelisted: false });
     } else {
       // Check limits before adding
-      const userPlan = (session.user as any).plan as Plan | undefined;
+      const userPlan = (session.user as AppUser).plan;
       const limit = getTierLimit(userPlan, "maxWhitelist");
 
       if (typeof limit === "number" && limit !== Infinity) {
