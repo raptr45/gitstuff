@@ -30,7 +30,7 @@ import {
   Search,
   ShieldAlert,
   ShieldCheck,
-  UserPlus
+  UserPlus,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -44,14 +44,16 @@ export function UserPageClient({ username }: UserPageClientProps) {
     whitelists,
     toggleWhitelist,
     saveFollowerState,
+    saveFollowingState,
     isWhitelisted,
-    setWhitelists,
     updateUserWhitelist,
   } = useStore();
 
   const [stats, setStats] = useState<UserStats | null>(null);
   const [followers, setFollowers] = useState<GitHubUserSummary[]>([]);
   const [following, setFollowing] = useState<GitHubUserSummary[]>([]);
+  const [newFollowers, setNewFollowers] = useState<GitHubUserSummary[]>([]);
+  const [newFollowing, setNewFollowing] = useState<GitHubUserSummary[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
 
   const [loadingStates, setLoadingStates] = useState({
@@ -64,8 +66,7 @@ export function UserPageClient({ username }: UserPageClientProps) {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const [newFollowers, setNewFollowers] = useState<GitHubUserSummary[]>([]);
-  const [unfollowers, setUnfollowers] = useState<GitHubUserSummary[]>([]);
+  const [pendingUnfollows, setPendingUnfollows] = useState<string[]>([]);
 
   const fetchStats = useCallback(
     async (refresh = false) => {
@@ -84,36 +85,60 @@ export function UserPageClient({ username }: UserPageClientProps) {
     [username]
   );
 
-  const fetchLists = useCallback(async () => {
-    try {
-      const [fRes, ingRes] = await Promise.all([
-        fetch(`/api/users/${username}/list?type=followers`),
-        fetch(`/api/users/${username}/list?type=following`),
-      ]);
+  const fetchFollowersList = useCallback(
+    async (force: boolean = false) => {
+      try {
+        const res = await fetch(
+          `/api/users/${username}/list?type=followers${
+            force ? "&refresh=true" : ""
+          }`
+        );
+        const data: APIResponse<GitHubUserSummary[]> = await res.json();
 
-      const fData: APIResponse<GitHubUserSummary[]> = await fRes.json();
-      const ingData: APIResponse<GitHubUserSummary[]> = await ingRes.json();
-
-      if (fData.success) {
-        setFollowers(fData.data);
-        const diff = saveFollowerState(username, fData.data);
-        setNewFollowers(diff.newFollowers);
-        setUnfollowers(diff.unfollowers);
+        if (data.success) {
+          setFollowers(data.data);
+          const diff = saveFollowerState(username, data.data);
+          setNewFollowers(diff.newFollowers);
+        }
+      } catch (err) {
+        console.error("Failed to fetch followers list", err);
+      } finally {
+        setLoadingStates((prev) => ({ ...prev, followers: false }));
       }
+    },
+    [username, saveFollowerState]
+  );
 
-      if (ingData.success) {
-        setFollowing(ingData.data);
+  const fetchFollowingList = useCallback(
+    async (force: boolean = false) => {
+      try {
+        const res = await fetch(
+          `/api/users/${username}/list?type=following${
+            force ? "&refresh=true" : ""
+          }`
+        );
+        const data: APIResponse<GitHubUserSummary[]> = await res.json();
+
+        if (data.success) {
+          setFollowing(data.data);
+          const diff = saveFollowingState(username, data.data);
+          setNewFollowing(diff.newFollowing);
+        }
+      } catch (err) {
+        console.error("Failed to fetch following list", err);
+      } finally {
+        setLoadingStates((prev) => ({ ...prev, following: false }));
       }
-    } catch (err) {
-      console.error("Failed to fetch lists", err);
-    } finally {
-      setLoadingStates((prev) => ({
-        ...prev,
-        followers: false,
-        following: false,
-      }));
-    }
-  }, [username, saveFollowerState]);
+    },
+    [username, saveFollowingState]
+  );
+
+  const fetchLists = useCallback(
+    async (force: boolean = false) => {
+      await Promise.all([fetchFollowersList(force), fetchFollowingList(force)]);
+    },
+    [fetchFollowersList, fetchFollowingList]
+  );
 
   const fetchWhitelist = useCallback(async () => {
     try {
@@ -140,7 +165,11 @@ export function UserPageClient({ username }: UserPageClientProps) {
       if (refresh) setIsRefreshing(true);
       setError(null);
 
-      await Promise.all([fetchStats(refresh), fetchLists(), fetchWhitelist()]);
+      await Promise.all([
+        fetchStats(refresh),
+        fetchLists(refresh),
+        fetchWhitelist(),
+      ]);
 
       if (refresh) {
         setIsRefreshing(false);
@@ -150,30 +179,35 @@ export function UserPageClient({ username }: UserPageClientProps) {
     [fetchStats, fetchLists, fetchWhitelist]
   );
 
-  const { data: session } = authClient.useSession();
+  authClient.useSession();
 
-  const handleUnfollow = useCallback(
-    async (targetLogin: string) => {
-      try {
-        const res = await fetch("/api/actions/unfollow", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ targetUsername: targetLogin }),
-        });
+  const handleUnfollow = useCallback(async (targetLogin: string) => {
+    setPendingUnfollows((prev) => [...prev, targetLogin]);
+    try {
+      const res = await fetch("/api/actions/unfollow", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ targetUsername: targetLogin }),
+      });
 
-        const data = await res.json();
-        if (data.success) {
-          toast.success(`Succesfully unfollowed @${targetLogin}`);
-          fetchLists(); // Only refresh lists, not full page
-        } else {
-          toast.error(data.error || "Failed to unfollow");
-        }
-      } catch {
-        toast.error("An error occurred while trying to unfollow");
+      const data = await res.json();
+      if (data.success) {
+        toast.success(`Succesfully unfollowed @${targetLogin}`);
+        // Manually remove from local state to immediately update UI.
+        // We do NOT re-fetch from providing API here because GitHub API has a delay (cache)
+        // which would return the old list and cause the user to "reappear" (ghost bug).
+        setFollowing((prev) => prev.filter((u) => u.login !== targetLogin));
+      } else {
+        toast.error(data.error || "Failed to unfollow");
       }
-    },
-    [fetchLists]
-  );
+    } catch {
+      toast.error("An error occurred while trying to unfollow");
+    } finally {
+      setPendingUnfollows((prev) =>
+        prev.filter((login) => login !== targetLogin)
+      );
+    }
+  }, []);
 
   const handleToggleWhitelist = useCallback(
     async (login: string) => {
@@ -204,21 +238,37 @@ export function UserPageClient({ username }: UserPageClientProps) {
     fetchAllData();
   }, [fetchAllData]);
 
-  const filteredFollowers = useMemo(
-    () =>
-      followers.filter((f) =>
-        f.login.toLowerCase().includes(searchQuery.toLowerCase())
-      ),
-    [followers, searchQuery]
-  );
+  const filteredFollowers = useMemo(() => {
+    const filtered = followers.filter((f) =>
+      f.login.toLowerCase().includes(searchQuery.toLowerCase())
+    );
 
-  const filteredFollowing = useMemo(
-    () =>
-      following.filter((f) =>
-        f.login.toLowerCase().includes(searchQuery.toLowerCase())
-      ),
-    [following, searchQuery]
-  );
+    // Sort: new followers first, then the rest
+    const newFollowerLogins = new Set(newFollowers.map((f) => f.login));
+    return filtered.sort((a, b) => {
+      const aIsNew = newFollowerLogins.has(a.login);
+      const bIsNew = newFollowerLogins.has(b.login);
+      if (aIsNew && !bIsNew) return -1;
+      if (!aIsNew && bIsNew) return 1;
+      return 0;
+    });
+  }, [followers, searchQuery, newFollowers]);
+
+  const filteredFollowing = useMemo(() => {
+    const filtered = following
+      .filter((f) => !pendingUnfollows.includes(f.login))
+      .filter((f) => f.login.toLowerCase().includes(searchQuery.toLowerCase()));
+
+    // Sort: new following first, then the rest
+    const newFollowingLogins = new Set(newFollowing.map((f) => f.login));
+    return filtered.sort((a, b) => {
+      const aIsNew = newFollowingLogins.has(a.login);
+      const bIsNew = newFollowingLogins.has(b.login);
+      if (aIsNew && !bIsNew) return -1;
+      if (!aIsNew && bIsNew) return 1;
+      return 0;
+    });
+  }, [following, searchQuery, pendingUnfollows, newFollowing]);
 
   const whitelist = useMemo(
     () => whitelists[username] || [],
@@ -227,8 +277,10 @@ export function UserPageClient({ username }: UserPageClientProps) {
 
   const potentialUnfollows = useMemo(
     () =>
-      following.filter((ing) => !followers.some((f) => f.login === ing.login)),
-    [following, followers]
+      following
+        .filter((ing) => !pendingUnfollows.includes(ing.login))
+        .filter((ing) => !followers.some((f) => f.login === ing.login)),
+    [following, followers, pendingUnfollows]
   );
 
   if (loadingStates.stats && !stats) {
@@ -269,17 +321,17 @@ export function UserPageClient({ username }: UserPageClientProps) {
     <div className="min-h-screen bg-background p-4 md:p-8">
       <div className="max-w-6xl mx-auto space-y-8">
         <div className="flex justify-end mb-4">
-             <Button
-              variant="outline"
-              onClick={() => fetchAllData(true)}
-              disabled={isRefreshing}
-              className="gap-2 rounded-xl"
-            >
-              <RefreshCw
-                className={`w-4 h-4 ${isRefreshing ? "animate-spin" : ""}`}
-              />
-              Refresh Data
-            </Button>
+          <Button
+            variant="outline"
+            onClick={() => fetchAllData(true)}
+            disabled={isRefreshing}
+            className="gap-2 rounded-xl"
+          >
+            <RefreshCw
+              className={`w-4 h-4 ${isRefreshing ? "animate-spin" : ""}`}
+            />
+            Refresh Data
+          </Button>
         </div>
 
         {/* User Card - Ultra Premium */}
@@ -440,6 +492,7 @@ export function UserPageClient({ username }: UserPageClientProps) {
               onToggleWhitelist={handleToggleWhitelist}
               whitelist={whitelist}
               isLoading={loadingStates.followers}
+              unfollowingLogins={pendingUnfollows}
             />
           </TabsContent>
 
@@ -450,12 +503,12 @@ export function UserPageClient({ username }: UserPageClientProps) {
               whitelist={whitelist}
               showFollowBackStatus={followers}
               isLoading={loadingStates.following}
+              unfollowingLogins={pendingUnfollows}
             />
           </TabsContent>
 
           <TabsContent value="tracking" className="m-0 space-y-8 outline-none">
             <div className="flex flex-col gap-8">
-
               {/* Potential Unfollows Card - Ultra Premium */}
               <div className="relative group">
                 <div className="absolute -inset-0.5 bg-linear-to-r from-blue-600 to-cyan-600 rounded-[2rem] blur opacity-10 group-hover:opacity-20 transition duration-1000 group-hover:duration-200"></div>
@@ -483,8 +536,11 @@ export function UserPageClient({ username }: UserPageClientProps) {
                       users={potentialUnfollows}
                       onToggleWhitelist={handleToggleWhitelist}
                       whitelist={whitelist}
-                      isLoading={loadingStates.following || loadingStates.followers}
+                      isLoading={
+                        loadingStates.following || loadingStates.followers
+                      }
                       variant="danger"
+                      unfollowingLogins={pendingUnfollows}
                       onUnfollow={(login) => {
                         if (isWhitelisted(username, login)) {
                           toast.error(
@@ -645,4 +701,3 @@ export function UserPageClient({ username }: UserPageClientProps) {
     </div>
   );
 }
-

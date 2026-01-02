@@ -154,6 +154,46 @@ export class GitHubAPIClient implements IGitHubAPIClient {
     }));
   }
 
+  /**
+   * Fetch authenticated user's followers (requires token)
+   * Uses /user/followers endpoint with higher rate limits
+   */
+  async fetchAuthenticatedUserFollowers(
+    page = 1,
+    token: string
+  ): Promise<GitHubUserSummary[]> {
+    const data = await this.request<Record<string, unknown>[]>(
+      `/user/followers?per_page=100&page=${page}`,
+      {},
+      token
+    );
+    return data.map((item) => ({
+      login: item.login as string,
+      avatar_url: item.avatar_url as string,
+      html_url: item.html_url as string,
+    }));
+  }
+
+  /**
+   * Fetch authenticated user's following (requires token)
+   * Uses /user/following endpoint with higher rate limits
+   */
+  async fetchAuthenticatedUserFollowing(
+    page = 1,
+    token: string
+  ): Promise<GitHubUserSummary[]> {
+    const data = await this.request<Record<string, unknown>[]>(
+      `/user/following?per_page=100&page=${page}`,
+      {},
+      token
+    );
+    return data.map((item) => ({
+      login: item.login as string,
+      avatar_url: item.avatar_url as string,
+      html_url: item.html_url as string,
+    }));
+  }
+
   // Legacy support for older interface if needed
   async fetchUserFollowers(username: string): Promise<UserStats> {
     return this.fetchUser(username) as unknown as UserStats;

@@ -105,31 +105,35 @@ export class FollowerService implements IFollowerService {
 
   async getFollowersList(
     username: string,
-    token?: string
+    token?: string,
+    forceRefresh: boolean = false,
+    authenticatedUsername?: string
   ): Promise<GitHubUserSummary[]> {
     const cacheKey = `github:followers-list:${username}`;
-    const cached = this.cache.get<GitHubUserSummary[]>(cacheKey);
-    if (cached) return cached;
+    if (!forceRefresh) {
+      const cached = this.cache.get<GitHubUserSummary[]>(cacheKey);
+      if (cached) return cached;
+    }
 
-    // First get the count to know how many pages
-    const stats = await this.getUserStats(username, false, token);
-    const total = stats.followers;
-    const pages = Math.ceil(total / 100);
+    // Use authenticated endpoint if viewing own profile with token
+    const useAuthEndpoint =
+      authenticatedUsername && username === authenticatedUsername && token;
 
+    // Fetch all pages dynamically until we run out of data
     const fullList: GitHubUserSummary[] = [];
+    let page = 1;
+    while (true) {
+      const pageData = useAuthEndpoint
+        ? await this.apiClient.fetchAuthenticatedUserFollowers(page, token!)
+        : await this.apiClient.fetchFollowers(username, page, token);
 
-    // Fetch all pages
-    // For large counts (e.g. 1k+), this might take a few seconds
-    // but with per_page=100 it's manageable.
-    for (let page = 1; page <= pages; page++) {
-      const pageData = await this.apiClient.fetchFollowers(
-        username,
-        page,
-        token
-      );
+      if (pageData.length === 0) break;
+
       fullList.push(...pageData);
-      // Safety break for extreme cases to avoid infinite loops or memory issues
-      if (page >= 50 || pageData.length === 0) break;
+
+      if (pageData.length < 100) break;
+      if (page >= 50) break; // Safety limit (5k users)
+      page++;
     }
 
     this.cache.set(cacheKey, fullList, this.defaultTTL);
@@ -138,26 +142,35 @@ export class FollowerService implements IFollowerService {
 
   async getFollowingList(
     username: string,
-    token?: string
+    token?: string,
+    forceRefresh: boolean = false,
+    authenticatedUsername?: string
   ): Promise<GitHubUserSummary[]> {
     const cacheKey = `github:following-list:${username}`;
-    const cached = this.cache.get<GitHubUserSummary[]>(cacheKey);
-    if (cached) return cached;
+    if (!forceRefresh) {
+      const cached = this.cache.get<GitHubUserSummary[]>(cacheKey);
+      if (cached) return cached;
+    }
 
-    const stats = await this.getUserStats(username, false, token);
-    const total = stats.following;
-    const pages = Math.ceil(total / 100);
+    // Use authenticated endpoint if viewing own profile with token
+    const useAuthEndpoint =
+      authenticatedUsername && username === authenticatedUsername && token;
 
+    // Fetch all pages dynamically until we run out of data
     const fullList: GitHubUserSummary[] = [];
+    let page = 1;
+    while (true) {
+      const pageData = useAuthEndpoint
+        ? await this.apiClient.fetchAuthenticatedUserFollowing(page, token!)
+        : await this.apiClient.fetchFollowing(username, page, token);
 
-    for (let page = 1; page <= pages; page++) {
-      const pageData = await this.apiClient.fetchFollowing(
-        username,
-        page,
-        token
-      );
+      if (pageData.length === 0) break;
+
       fullList.push(...pageData);
-      if (page >= 50 || pageData.length === 0) break;
+
+      if (pageData.length < 100) break;
+      if (page >= 50) break; // Safety limit
+      page++;
     }
 
     this.cache.set(cacheKey, fullList, this.defaultTTL);

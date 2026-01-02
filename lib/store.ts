@@ -11,6 +11,7 @@ interface TrackedUser {
 interface UserState {
   whitelists: Record<string, string[]>; // targetUsername -> whitelistedLogins[]
   followerHistory: Record<string, TrackedUser>; // targetUsername -> historicalInfo
+  followingHistory: Record<string, TrackedUser>; // targetUsername -> historicalInfo
 
   // Actions
   toggleWhitelist: (targetUsername: string, userToWhitelist: string) => void;
@@ -22,6 +23,13 @@ interface UserState {
     newFollowers: GitHubUserSummary[];
     unfollowers: GitHubUserSummary[];
   };
+  saveFollowingState: (
+    targetUsername: string,
+    following: GitHubUserSummary[]
+  ) => {
+    newFollowing: GitHubUserSummary[];
+    unfollowing: GitHubUserSummary[];
+  };
   setWhitelists: (whitelists: Record<string, string[]>) => void;
   updateUserWhitelist: (targetUsername: string, logins: string[]) => void;
 }
@@ -31,6 +39,7 @@ export const useStore = create<UserState>()(
     (set, get) => ({
       whitelists: {},
       followerHistory: {},
+      followingHistory: {},
 
       toggleWhitelist: (target, login) => {
         set((state) => {
@@ -80,6 +89,39 @@ export const useStore = create<UserState>()(
         }));
 
         return { newFollowers, unfollowers };
+      },
+
+      saveFollowingState: (target, currentFollowing) => {
+        const state = get();
+        const history = state.followingHistory[target];
+
+        let newFollowing: GitHubUserSummary[] = [];
+        let unfollowing: GitHubUserSummary[] = [];
+
+        if (history) {
+          const oldLogins = new Set(history.followers.map((f) => f.login));
+          const currentLogins = new Set(currentFollowing.map((f) => f.login));
+
+          newFollowing = currentFollowing.filter(
+            (f) => !oldLogins.has(f.login)
+          );
+          unfollowing = history.followers.filter(
+            (f) => !currentLogins.has(f.login)
+          );
+        }
+
+        set((state) => ({
+          followingHistory: {
+            ...state.followingHistory,
+            [target]: {
+              username: target,
+              followers: currentFollowing,
+              lastChecked: Date.now(),
+            },
+          },
+        }));
+
+        return { newFollowing, unfollowing };
       },
 
       setWhitelists: (whitelists) => set({ whitelists }),

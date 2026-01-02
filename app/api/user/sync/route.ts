@@ -15,9 +15,9 @@ export async function POST() {
   const userId = session.user.id;
 
   // 1. Check if user already has username in DB (source of truth)
+
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    select: { username: true },
   });
 
   if (user?.username) {
@@ -49,7 +49,7 @@ export async function POST() {
     });
 
     if (!ghRes.ok) {
-        // Fallback: If token expired, we might need re-auth, but let's try reading schema?
+      // Fallback: If token expired, we might need re-auth, but let's try reading schema?
       throw new Error("Failed to fetch GitHub profile");
     }
 

@@ -88,6 +88,14 @@ export interface GitHubAPIClient {
     page?: number,
     token?: string
   ): Promise<GitHubUserSummary[]>;
+  fetchAuthenticatedUserFollowers(
+    page: number,
+    token: string
+  ): Promise<GitHubUserSummary[]>;
+  fetchAuthenticatedUserFollowing(
+    page: number,
+    token: string
+  ): Promise<GitHubUserSummary[]>;
 }
 
 /**
@@ -117,10 +125,14 @@ export interface FollowerService {
   ): Promise<UserStats>;
   getFollowersList(
     username: string,
-    token?: string
+    token?: string,
+    forceRefresh?: boolean,
+    authenticatedUsername?: string
   ): Promise<GitHubUserSummary[]>;
   getFollowingList(
     username: string,
-    token?: string
+    token?: string,
+    forceRefresh?: boolean,
+    authenticatedUsername?: string
   ): Promise<GitHubUserSummary[]>;
 }
