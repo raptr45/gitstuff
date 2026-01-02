@@ -24,7 +24,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { UserGrid } from "@/components/user-grid";
 import { authClient } from "@/lib/auth-client";
 import { useStore, type GitHubUserWithTimestamp } from "@/lib/store";
-import { APIResponse, GitHubUserSummary, UserStats } from "@/lib/types";
+import { getTierLimit } from "@/lib/tier-limits";
+import { APIResponse, GitHubUserSummary, Plan, UserStats } from "@/lib/types";
 import {
   BookMarked,
   RefreshCw,
@@ -47,6 +48,8 @@ export function UserPageClient({ username }: UserPageClientProps) {
     trackFollowing,
     isWhitelisted,
     updateUserWhitelist,
+    plan,
+    setPlan,
   } = useStore();
 
   const [stats, setStats] = useState<UserStats | null>(null);
@@ -175,7 +178,13 @@ export function UserPageClient({ username }: UserPageClientProps) {
     [fetchStats, fetchLists, fetchWhitelist]
   );
 
-  authClient.useSession();
+  const { data: session } = authClient.useSession();
+
+  useEffect(() => {
+    if (session?.user) {
+      setPlan(((session.user as any).plan as Plan) || "FREE");
+    }
+  }, [session, setPlan]);
 
   const handleUnfollow = useCallback(async (targetLogin: string) => {
     setPendingUnfollows((prev) => [...prev, targetLogin]);
@@ -403,9 +412,13 @@ export function UserPageClient({ username }: UserPageClientProps) {
                         </CardTitle>
                         <Badge
                           variant="outline"
-                          className="rounded-full px-4 py-1 border-primary/20 bg-primary/5 text-primary font-black uppercase text-[10px] tracking-widest"
+                          className={`rounded-full px-4 py-1 border-primary/20 bg-primary/5 font-black uppercase text-[10px] tracking-widest ${
+                            plan === "PRO"
+                              ? "text-purple-500 bg-purple-500/10 border-purple-500/20"
+                              : "text-primary"
+                          }`}
                         >
-                          Active User
+                          {plan === "PRO" ? "SUPPORTER TIER" : "FREE TIER"}
                         </Badge>
                       </div>
                       <p className="text-2xl text-zinc-400 font-bold tracking-tight">
@@ -590,6 +603,25 @@ export function UserPageClient({ username }: UserPageClientProps) {
                   </Badge>
                 </CardHeader>
                 <CardContent className="p-0">
+                  {plan === "FREE" &&
+                    whitelist.length >=
+                      (getTierLimit("FREE", "maxWhitelist") as number) && (
+                      <div className="p-4 bg-amber-500/10 border-b border-amber-500/20 flex flex-col md:flex-row items-center justify-between gap-4">
+                        <div className="flex items-center gap-3 text-amber-600 dark:text-amber-500">
+                          <ShieldAlert className="w-5 h-5" />
+                          <span className="font-bold text-sm">
+                            Free limit reached (10 users). Upgrade to Supporter
+                            for unlimited protection.
+                          </span>
+                        </div>
+                        <Button
+                          size="sm"
+                          className="bg-amber-500 hover:bg-amber-600 text-white border-none font-bold"
+                        >
+                          Become a Supporter
+                        </Button>
+                      </div>
+                    )}
                   <Table>
                     <TableHeader>
                       <TableRow className="hover:bg-transparent border-zinc-500/10">

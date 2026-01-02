@@ -5,6 +5,8 @@
 /**
  * GitHub user data from the GitHub API
  */
+export type Plan = "FREE" | "PRO";
+
 export interface GitHubUser {
   login: string;
   followers: number;
