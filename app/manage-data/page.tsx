@@ -2,36 +2,37 @@
 
 import { Button } from "@/components/ui/button";
 import {
-    Card,
-    CardContent,
-    CardDescription,
-    CardHeader,
-    CardTitle,
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
 } from "@/components/ui/card";
 import { authClient } from "@/lib/auth-client";
 import { useStore } from "@/lib/store"; // Import store
 import { AlertTriangle, Database, Trash2 } from "lucide-react";
-import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { toast } from "sonner";
 
 export default function ManageData() {
-  const router = useRouter();
   const { data: session } = authClient.useSession();
-  const { setWhitelists, saveFollowerState } = useStore(); // Get store actions
   const [isDeleting, setIsDeleting] = useState(false);
 
   const handleDeleteData = async () => {
-    if (!confirm("Are you sure? This will delete all your tracking history and whitelists. This status cannot be undone.")) {
-        return;
+    if (
+      !confirm(
+        "Are you sure? This will delete all your tracking history and whitelists. This status cannot be undone."
+      )
+    ) {
+      return;
     }
-    
+
     setIsDeleting(true);
     try {
       const res = await fetch("/api/user/data", { method: "DELETE" });
       if (res.ok) {
         // Clear client-side state
-        useStore.persist.clearStorage(); 
+        useStore.persist.clearStorage();
         // Force reload to reset state in memory immediately
         window.location.href = "/";
         toast.success("Data deleted successfully");
@@ -92,17 +93,19 @@ export default function ManageData() {
 
         {/* Placeholder for Data Summary if we want to fetch it */}
         <Card>
-            <CardHeader>
-                <div className="flex items-center gap-3">
-                  <Database className="w-5 h-5 text-primary" />
-                  <CardTitle>Data Overview</CardTitle>
-                </div>
-            </CardHeader>
-            <CardContent>
-                <p className="text-muted-foreground">
-                    Your account stores snapshots of your follower lists to detect changes, and a list of whitelisted users you've chosen to protect.
-                </p>
-            </CardContent>
+          <CardHeader>
+            <div className="flex items-center gap-3">
+              <Database className="w-5 h-5 text-primary" />
+              <CardTitle>Data Overview</CardTitle>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <p className="text-muted-foreground">
+              Your account stores snapshots of your follower lists to detect
+              changes, and a list of whitelisted users you&apos;ve chosen to
+              protect.
+            </p>
+          </CardContent>
         </Card>
       </div>
     </div>
