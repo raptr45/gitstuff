@@ -11,6 +11,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Table,
   TableBody,
@@ -275,15 +276,65 @@ export function UserPageClient({ username }: UserPageClientProps) {
 
   if (loadingStates.stats && !stats) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="flex flex-col items-center gap-4">
-          <div className="relative">
-            <div className="absolute -inset-4 bg-primary/20 blur-2xl rounded-full animate-pulse"></div>
-            <RefreshCw className="w-10 h-10 animate-spin text-primary relative" />
+      <div className="min-h-screen bg-background p-4 md:p-8">
+        <div className="max-w-6xl mx-auto space-y-8">
+          <div className="flex justify-end mb-4">
+            <Skeleton className="h-10 w-32 rounded-xl" />
           </div>
-          <p className="text-xl font-bold tracking-tight animate-pulse bg-linear-to-r from-primary to-purple-600 bg-clip-text text-transparent">
-            Synchronizing GitHub Intelligence...
-          </p>
+
+          {/* User Card Skeleton */}
+          <div className="relative">
+            <div className="absolute -inset-1 bg-linear-to-r from-primary/10 via-purple-500/10 to-primary/10 rounded-[2.5rem] blur-2xl opacity-20"></div>
+            <Card className="relative overflow-hidden border-none shadow-2xl bg-white/70 dark:bg-zinc-950/70 backdrop-blur-3xl rounded-[2.5rem] px-2 py-4">
+              <CardHeader className="pb-6">
+                <div className="flex flex-col md:flex-row items-center gap-8 px-4">
+                  <Skeleton className="w-40 h-40 rounded-full" />
+                  <div className="flex-1 space-y-4 w-full text-center md:text-left">
+                    <div className="space-y-2">
+                      <Skeleton className="h-12 w-2/3 mx-auto md:mx-0 rounded-xl" />
+                      <Skeleton className="h-6 w-1/3 mx-auto md:mx-0 rounded-lg" />
+                    </div>
+                    <Skeleton className="h-4 w-full max-w-xl mx-auto md:mx-0 rounded-md" />
+                    <div className="flex justify-center md:justify-start gap-12 pt-4">
+                      <div className="space-y-2">
+                        <Skeleton className="h-8 w-16" />
+                        <Skeleton className="h-3 w-12" />
+                      </div>
+                      <div className="space-y-2">
+                        <Skeleton className="h-8 w-16" />
+                        <Skeleton className="h-3 w-12" />
+                      </div>
+                      <div className="space-y-2">
+                        <Skeleton className="h-8 w-16" />
+                        <Skeleton className="h-3 w-12" />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </CardHeader>
+            </Card>
+          </div>
+
+          <div className="space-y-6">
+            <div className="flex flex-col md:flex-row justify-between items-center gap-4 py-4 border-b border-zinc-500/10">
+              <Skeleton className="h-12 w-full md:w-[400px] rounded-xl" />
+              <Skeleton className="h-10 w-full md:w-80 rounded-xl" />
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <div
+                  key={i}
+                  className="h-24 rounded-3xl border border-zinc-500/10 p-4 flex items-center gap-4"
+                >
+                  <Skeleton className="w-16 h-16 rounded-full" />
+                  <div className="flex-1 space-y-2">
+                    <Skeleton className="h-5 w-1/2" />
+                    <Skeleton className="h-4 w-1/3" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
       </div>
     );

@@ -12,6 +12,8 @@ import { FollowerData } from "@/lib/types";
 import { Clock, Users } from "lucide-react";
 import Link from "next/link";
 
+import { Skeleton } from "@/components/ui/skeleton";
+
 interface FollowerDisplayProps {
   data: FollowerData | null;
   error: string | null;
@@ -30,15 +32,15 @@ export function FollowerDisplay({
       <Card className="w-full max-w-md">
         <CardHeader>
           <div className="flex items-center gap-4">
-            <div className="w-16 h-16 rounded-full bg-muted animate-pulse" />
+            <Skeleton className="w-16 h-16 rounded-full" />
             <div className="flex-1 space-y-2">
-              <div className="h-4 bg-muted rounded animate-pulse w-3/4" />
-              <div className="h-3 bg-muted rounded animate-pulse w-1/2" />
+              <Skeleton className="h-4 w-3/4" />
+              <Skeleton className="h-3 w-1/2" />
             </div>
           </div>
         </CardHeader>
         <CardContent>
-          <div className="h-8 bg-muted rounded animate-pulse w-1/3" />
+          <Skeleton className="h-8 w-1/3" />
         </CardContent>
       </Card>
     );
