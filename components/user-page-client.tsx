@@ -22,7 +22,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { UserGrid } from "@/components/user-grid";
 import { authClient } from "@/lib/auth-client";
-import { useStore } from "@/lib/store";
+import { useStore, type GitHubUserWithTimestamp } from "@/lib/store";
 import { APIResponse, GitHubUserSummary, UserStats } from "@/lib/types";
 import {
   BookMarked,
@@ -30,7 +30,6 @@ import {
   Search,
   ShieldAlert,
   ShieldCheck,
-  UserPlus,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -43,17 +42,15 @@ export function UserPageClient({ username }: UserPageClientProps) {
   const {
     whitelists,
     toggleWhitelist,
-    saveFollowerState,
-    saveFollowingState,
+    trackFollowers,
+    trackFollowing,
     isWhitelisted,
     updateUserWhitelist,
   } = useStore();
 
   const [stats, setStats] = useState<UserStats | null>(null);
-  const [followers, setFollowers] = useState<GitHubUserSummary[]>([]);
-  const [following, setFollowing] = useState<GitHubUserSummary[]>([]);
-  const [newFollowers, setNewFollowers] = useState<GitHubUserSummary[]>([]);
-  const [newFollowing, setNewFollowing] = useState<GitHubUserSummary[]>([]);
+  const [followers, setFollowers] = useState<GitHubUserWithTimestamp[]>([]);
+  const [following, setFollowing] = useState<GitHubUserWithTimestamp[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
 
   const [loadingStates, setLoadingStates] = useState({
@@ -96,9 +93,8 @@ export function UserPageClient({ username }: UserPageClientProps) {
         const data: APIResponse<GitHubUserSummary[]> = await res.json();
 
         if (data.success) {
-          setFollowers(data.data);
-          const diff = saveFollowerState(username, data.data);
-          setNewFollowers(diff.newFollowers);
+          const timestampedData = trackFollowers(username, data.data);
+          setFollowers(timestampedData);
         }
       } catch (err) {
         console.error("Failed to fetch followers list", err);
@@ -106,7 +102,7 @@ export function UserPageClient({ username }: UserPageClientProps) {
         setLoadingStates((prev) => ({ ...prev, followers: false }));
       }
     },
-    [username, saveFollowerState]
+    [username, trackFollowers]
   );
 
   const fetchFollowingList = useCallback(
@@ -120,9 +116,8 @@ export function UserPageClient({ username }: UserPageClientProps) {
         const data: APIResponse<GitHubUserSummary[]> = await res.json();
 
         if (data.success) {
-          setFollowing(data.data);
-          const diff = saveFollowingState(username, data.data);
-          setNewFollowing(diff.newFollowing);
+          const timestampedData = trackFollowing(username, data.data);
+          setFollowing(timestampedData);
         }
       } catch (err) {
         console.error("Failed to fetch following list", err);
@@ -130,7 +125,7 @@ export function UserPageClient({ username }: UserPageClientProps) {
         setLoadingStates((prev) => ({ ...prev, following: false }));
       }
     },
-    [username, saveFollowingState]
+    [username, trackFollowing]
   );
 
   const fetchLists = useCallback(
@@ -243,32 +238,26 @@ export function UserPageClient({ username }: UserPageClientProps) {
       f.login.toLowerCase().includes(searchQuery.toLowerCase())
     );
 
-    // Sort: new followers first, then the rest
-    const newFollowerLogins = new Set(newFollowers.map((f) => f.login));
+    // Sort by timestamp: newest first (highest timestamp = most recent)
     return filtered.sort((a, b) => {
-      const aIsNew = newFollowerLogins.has(a.login);
-      const bIsNew = newFollowerLogins.has(b.login);
-      if (aIsNew && !bIsNew) return -1;
-      if (!aIsNew && bIsNew) return 1;
-      return 0;
+      const aTime = a.firstSeenAt || 0;
+      const bTime = b.firstSeenAt || 0;
+      return bTime - aTime;
     });
-  }, [followers, searchQuery, newFollowers]);
+  }, [followers, searchQuery]);
 
   const filteredFollowing = useMemo(() => {
     const filtered = following
       .filter((f) => !pendingUnfollows.includes(f.login))
       .filter((f) => f.login.toLowerCase().includes(searchQuery.toLowerCase()));
 
-    // Sort: new following first, then the rest
-    const newFollowingLogins = new Set(newFollowing.map((f) => f.login));
+    // Sort by timestamp: newest first (highest timestamp = most recent)
     return filtered.sort((a, b) => {
-      const aIsNew = newFollowingLogins.has(a.login);
-      const bIsNew = newFollowingLogins.has(b.login);
-      if (aIsNew && !bIsNew) return -1;
-      if (!aIsNew && bIsNew) return 1;
-      return 0;
+      const aTime = a.firstSeenAt || 0;
+      const bTime = b.firstSeenAt || 0;
+      return bTime - aTime;
     });
-  }, [following, searchQuery, pendingUnfollows, newFollowing]);
+  }, [following, searchQuery, pendingUnfollows]);
 
   const whitelist = useMemo(
     () => whitelists[username] || [],
@@ -279,7 +268,8 @@ export function UserPageClient({ username }: UserPageClientProps) {
     () =>
       following
         .filter((ing) => !pendingUnfollows.includes(ing.login))
-        .filter((ing) => !followers.some((f) => f.login === ing.login)),
+        .filter((ing) => !followers.some((f) => f.login === ing.login))
+        .sort((a, b) => (b.firstSeenAt || 0) - (a.firstSeenAt || 0)),
     [following, followers, pendingUnfollows]
   );
 
@@ -419,14 +409,6 @@ export function UserPageClient({ username }: UserPageClientProps) {
                 className="data-[state=active]:bg-background data-[state=active]:shadow-sm px-6"
               >
                 Followers
-                {newFollowers.length > 0 && (
-                  <Badge
-                    variant="secondary"
-                    className="ml-2 bg-green-500/10 text-green-600 border-none"
-                  >
-                    +{newFollowers.length}
-                  </Badge>
-                )}
               </TabsTrigger>
               <TabsTrigger
                 value="following"
@@ -460,33 +442,6 @@ export function UserPageClient({ username }: UserPageClientProps) {
           </div>
 
           <TabsContent value="followers" className="m-0 space-y-6">
-            {newFollowers.length > 0 && (
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {newFollowers.map((f) => (
-                  <Card
-                    key={`new-${f.login}`}
-                    className="border-green-200 bg-green-50/30"
-                  >
-                    <CardContent className="p-4 flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <UserPlus className="w-5 h-5 text-green-600" />
-                        <div>
-                          <p className="font-bold">@{f.login}</p>
-                          <p className="text-xs text-green-700">
-                            New Follower!
-                          </p>
-                        </div>
-                      </div>
-                      <Avatar>
-                        <AvatarImage src={f.avatar_url} />
-                        <AvatarFallback>{f.login[0]}</AvatarFallback>
-                      </Avatar>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            )}
-
             <UserGrid
               users={filteredFollowers}
               onToggleWhitelist={handleToggleWhitelist}

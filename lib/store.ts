@@ -2,34 +2,36 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { GitHubUserSummary } from "./types";
 
-interface TrackedUser {
-  username: string;
-  followers: GitHubUserSummary[];
-  lastChecked: number;
+// Extended user with timestamp
+export interface GitHubUserWithTimestamp extends GitHubUserSummary {
+  firstSeenAt?: number; // When we first saw this user
+}
+
+interface UserTimestamps {
+  [login: string]: number; // login -> timestamp when first seen
 }
 
 interface UserState {
   whitelists: Record<string, string[]>; // targetUsername -> whitelistedLogins[]
-  followerHistory: Record<string, TrackedUser>; // targetUsername -> historicalInfo
-  followingHistory: Record<string, TrackedUser>; // targetUsername -> historicalInfo
+  followerTimestamps: Record<string, UserTimestamps>; // targetUsername -> {login -> timestamp}
+  followingTimestamps: Record<string, UserTimestamps>; // targetUsername -> {login -> timestamp}
 
   // Actions
   toggleWhitelist: (targetUsername: string, userToWhitelist: string) => void;
   isWhitelisted: (targetUsername: string, login: string) => boolean;
-  saveFollowerState: (
+
+  // Track followers with timestamps
+  trackFollowers: (
     targetUsername: string,
     followers: GitHubUserSummary[]
-  ) => {
-    newFollowers: GitHubUserSummary[];
-    unfollowers: GitHubUserSummary[];
-  };
-  saveFollowingState: (
+  ) => GitHubUserWithTimestamp[];
+
+  // Track following with timestamps
+  trackFollowing: (
     targetUsername: string,
     following: GitHubUserSummary[]
-  ) => {
-    newFollowing: GitHubUserSummary[];
-    unfollowing: GitHubUserSummary[];
-  };
+  ) => GitHubUserWithTimestamp[];
+
   setWhitelists: (whitelists: Record<string, string[]>) => void;
   updateUserWhitelist: (targetUsername: string, logins: string[]) => void;
 }
@@ -38,8 +40,8 @@ export const useStore = create<UserState>()(
   persist(
     (set, get) => ({
       whitelists: {},
-      followerHistory: {},
-      followingHistory: {},
+      followerTimestamps: {},
+      followingTimestamps: {},
 
       toggleWhitelist: (target, login) => {
         set((state) => {
@@ -58,70 +60,62 @@ export const useStore = create<UserState>()(
         return (get().whitelists[target] || []).includes(login);
       },
 
-      saveFollowerState: (target, currentFollowers) => {
+      trackFollowers: (target, currentFollowers) => {
         const state = get();
-        const history = state.followerHistory[target];
+        const existingTimestamps = state.followerTimestamps[target] || {};
+        const now = Date.now();
 
-        let newFollowers: GitHubUserSummary[] = [];
-        let unfollowers: GitHubUserSummary[] = [];
+        // Create new timestamps object with existing + new users
+        const updatedTimestamps: UserTimestamps = { ...existingTimestamps };
 
-        if (history) {
-          const oldLogins = new Set(history.followers.map((f) => f.login));
-          const currentLogins = new Set(currentFollowers.map((f) => f.login));
+        currentFollowers.forEach((follower) => {
+          if (!updatedTimestamps[follower.login]) {
+            updatedTimestamps[follower.login] = now;
+          }
+        });
 
-          newFollowers = currentFollowers.filter(
-            (f) => !oldLogins.has(f.login)
-          );
-          unfollowers = history.followers.filter(
-            (f) => !currentLogins.has(f.login)
-          );
-        }
-
+        // Update state
         set((state) => ({
-          followerHistory: {
-            ...state.followerHistory,
-            [target]: {
-              username: target,
-              followers: currentFollowers,
-              lastChecked: Date.now(),
-            },
+          followerTimestamps: {
+            ...state.followerTimestamps,
+            [target]: updatedTimestamps,
           },
         }));
 
-        return { newFollowers, unfollowers };
+        // Return followers with timestamps attached
+        return currentFollowers.map((follower) => ({
+          ...follower,
+          firstSeenAt: updatedTimestamps[follower.login],
+        }));
       },
 
-      saveFollowingState: (target, currentFollowing) => {
+      trackFollowing: (target, currentFollowing) => {
         const state = get();
-        const history = state.followingHistory[target];
+        const existingTimestamps = state.followingTimestamps[target] || {};
+        const now = Date.now();
 
-        let newFollowing: GitHubUserSummary[] = [];
-        let unfollowing: GitHubUserSummary[] = [];
+        // Create new timestamps object with existing + new users
+        const updatedTimestamps: UserTimestamps = { ...existingTimestamps };
 
-        if (history) {
-          const oldLogins = new Set(history.followers.map((f) => f.login));
-          const currentLogins = new Set(currentFollowing.map((f) => f.login));
+        currentFollowing.forEach((user) => {
+          if (!updatedTimestamps[user.login]) {
+            updatedTimestamps[user.login] = now;
+          }
+        });
 
-          newFollowing = currentFollowing.filter(
-            (f) => !oldLogins.has(f.login)
-          );
-          unfollowing = history.followers.filter(
-            (f) => !currentLogins.has(f.login)
-          );
-        }
-
+        // Update state
         set((state) => ({
-          followingHistory: {
-            ...state.followingHistory,
-            [target]: {
-              username: target,
-              followers: currentFollowing,
-              lastChecked: Date.now(),
-            },
+          followingTimestamps: {
+            ...state.followingTimestamps,
+            [target]: updatedTimestamps,
           },
         }));
 
-        return { newFollowing, unfollowing };
+        // Return following with timestamps attached
+        return currentFollowing.map((user) => ({
+          ...user,
+          firstSeenAt: updatedTimestamps[user.login],
+        }));
       },
 
       setWhitelists: (whitelists) => set({ whitelists }),
