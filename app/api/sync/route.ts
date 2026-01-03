@@ -49,8 +49,31 @@ export async function POST(req: Request) {
         following,
       },
     });
+
     return NextResponse.json({ success: true, snapshot });
   } catch {
     return NextResponse.json({ error: "Failed to sync" }, { status: 500 });
+  }
+}
+
+export async function DELETE(req: Request) {
+  const session = await auth.api.getSession({
+    headers: req.headers,
+  });
+
+  if (!session) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  try {
+    await prisma.followerSnapshot.delete({
+      where: { userId: session.user.id },
+    });
+    return NextResponse.json({ success: true });
+  } catch {
+    return NextResponse.json(
+      { error: "Failed to delete snapshot" },
+      { status: 500 }
+    );
   }
 }

@@ -16,16 +16,23 @@ export async function DELETE() {
     const userId = session.user.id;
     const user = await prisma.user.findUnique({ where: { id: userId } });
     if (!user?.username) {
-        return NextResponse.json({ error: "User profile incomplete" }, { status: 400 });
+      return NextResponse.json(
+        { error: "User profile incomplete" },
+        { status: 400 }
+      );
     }
 
     // Convert username to lowercase for consistency if needed, but Prisma findMany usually relies on exact match or we filter by userId if relations existed.
     // However, Whitelist and Snapshot are related by 'username' string in this schema design (not optimal foreign key but it is what it is).
     // Let's check schema via Prisma Client usage or assuming it's By Username string.
-    
+
     await prisma.$transaction([
       // Delete Whitelists
       prisma.whitelist.deleteMany({
+        where: { userId },
+      }),
+      // Delete Follower Snapshots
+      prisma.followerSnapshot.deleteMany({
         where: { userId },
       }),
     ]);
