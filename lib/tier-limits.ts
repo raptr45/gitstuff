@@ -6,12 +6,16 @@ export const TIER_LIMITS = {
     historyRetensionDays: 7,
     canExport: false,
     priorityRefresh: false,
+    maxSweepCount: 5,
+    sweepAutomation: false,
   },
   PRO: {
     maxWhitelist: Infinity,
     historyRetensionDays: Infinity,
     canExport: true,
     priorityRefresh: true,
+    maxSweepCount: Infinity,
+    sweepAutomation: true,
   },
 } as const;
 
