@@ -41,6 +41,7 @@ yarn-error.log*
 next-env.d.ts
 
 .kiro
+.agent
 docs
 /lib/generated/prisma
 /prisma/generated
