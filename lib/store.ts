@@ -36,6 +36,8 @@ interface UserState {
   setWhitelists: (whitelists: Record<string, string[]>) => void;
   updateUserWhitelist: (targetUsername: string, logins: string[]) => void;
   setPlan: (plan: Plan) => void;
+  syncToCloud: (username: string) => Promise<boolean>;
+  syncFromCloud: (username: string) => Promise<boolean>;
 }
 
 export const useStore = create<UserState>()(
@@ -66,6 +68,7 @@ export const useStore = create<UserState>()(
       trackFollowers: (target, currentFollowers) => {
         const state = get();
         const existingTimestamps = state.followerTimestamps[target] || {};
+        const isFirstScan = Object.keys(existingTimestamps).length === 0;
         const now = Date.now();
 
         // Create new timestamps object with existing + new users
@@ -73,7 +76,9 @@ export const useStore = create<UserState>()(
 
         currentFollowers.forEach((follower) => {
           if (!updatedTimestamps[follower.login]) {
-            updatedTimestamps[follower.login] = now;
+            // If first scan, treat everyone as "old" (timestamp 1)
+            // If subsequent scan, new users get "now"
+            updatedTimestamps[follower.login] = isFirstScan ? 1 : now;
           }
         });
 
@@ -95,6 +100,7 @@ export const useStore = create<UserState>()(
       trackFollowing: (target, currentFollowing) => {
         const state = get();
         const existingTimestamps = state.followingTimestamps[target] || {};
+        const isFirstScan = Object.keys(existingTimestamps).length === 0;
         const now = Date.now();
 
         // Create new timestamps object with existing + new users
@@ -102,7 +108,7 @@ export const useStore = create<UserState>()(
 
         currentFollowing.forEach((user) => {
           if (!updatedTimestamps[user.login]) {
-            updatedTimestamps[user.login] = now;
+            updatedTimestamps[user.login] = isFirstScan ? 1 : now;
           }
         });
 
@@ -129,6 +135,62 @@ export const useStore = create<UserState>()(
         })),
 
       setPlan: (plan) => set({ plan }),
+
+      syncToCloud: async (username) => {
+        const state = get();
+        const followers = state.followerTimestamps[username] || {};
+        const following = state.followingTimestamps[username] || {};
+
+        try {
+          const res = await fetch("/api/sync", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ followers, following }),
+          });
+          return res.ok;
+        } catch {
+          return false;
+        }
+      },
+
+      syncFromCloud: async (username) => {
+        try {
+          const res = await fetch("/api/sync");
+          if (!res.ok) return false;
+
+          const data = await res.json();
+          if (!data.success || !data.snapshot) return false;
+
+          // Merge logic: prefer Cloud if it has data
+          // Or overwrite local? "Restore" implies overwrite or merge max timestamp.
+          // Let's merge: keep max timestamp for each user.
+
+          set((state) => {
+            const cloudFollowers = data.snapshot.followers as UserTimestamps;
+            const cloudFollowing = data.snapshot.following as UserTimestamps;
+
+            const currentFollowers = state.followerTimestamps[username] || {};
+            const currentFollowing = state.followingTimestamps[username] || {};
+
+            const mergedFollowers = { ...currentFollowers, ...cloudFollowers }; // Simple merge
+            const mergedFollowing = { ...currentFollowing, ...cloudFollowing };
+
+            return {
+              followerTimestamps: {
+                ...state.followerTimestamps,
+                [username]: mergedFollowers,
+              },
+              followingTimestamps: {
+                ...state.followingTimestamps,
+                [username]: mergedFollowing,
+              },
+            };
+          });
+          return true;
+        } catch {
+          return false;
+        }
+      },
     }),
     {
       name: "gitstuff-storage",

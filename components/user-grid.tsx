@@ -12,6 +12,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { GitHubUserWithTimestamp } from "@/lib/store";
 import { GitHubUserSummary } from "@/lib/types";
 import {
   ExternalLink,
@@ -24,7 +25,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 
 interface UserGridProps {
-  users: GitHubUserSummary[];
+  users: (GitHubUserSummary | GitHubUserWithTimestamp)[];
   onToggleWhitelist: (login: string) => void | Promise<void>;
   onUnfollow?: (login: string) => void | Promise<void>;
   whitelist: string[];
@@ -56,6 +57,7 @@ export function UserGrid({
   onSelect,
 }: UserGridProps) {
   const [visibleCount, setVisibleCount] = useState(20);
+  const [now] = useState(() => Date.now());
 
   const handleLoadMore = useCallback(() => {
     setVisibleCount((prev) => prev + 20);
@@ -115,6 +117,10 @@ export function UserGrid({
           );
           const hasFollowBackStatus = !!showFollowBackStatus;
           const isUnfollowing = unfollowingLogins.includes(user.login);
+          const isNew =
+            "firstSeenAt" in user && user.firstSeenAt
+              ? user.firstSeenAt > now
+              : false;
 
           return (
             <div
@@ -185,6 +191,12 @@ export function UserGrid({
                       </Badge>
                     )}
                   </div>
+
+                  {isNew && (
+                    <Badge className="w-fit bg-emerald-500/10 text-emerald-600 border-none font-bold text-[9px] uppercase tracking-widest px-2 h-5">
+                      New
+                    </Badge>
+                  )}
                 </div>
               </div>
 

@@ -32,8 +32,10 @@ import {
   UserStats,
 } from "@/lib/types";
 import {
+  ArrowUpDown,
   BookMarked,
   Brush,
+  CloudUpload,
   RefreshCw,
   Search,
   ShieldAlert,
@@ -56,6 +58,8 @@ export function UserPageClient({ username }: UserPageClientProps) {
     updateUserWhitelist,
     plan,
     setPlan,
+    syncToCloud,
+    syncFromCloud,
   } = useStore();
 
   const [stats, setStats] = useState<UserStats | null>(null);
@@ -75,7 +79,9 @@ export function UserPageClient({ username }: UserPageClientProps) {
   });
 
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [sortDescending, setSortDescending] = useState(true);
 
   const [pendingUnfollows, setPendingUnfollows] = useState<string[]>([]);
 
@@ -188,6 +194,25 @@ export function UserPageClient({ username }: UserPageClientProps) {
     [fetchStats, fetchLists, fetchWhitelist]
   );
 
+  const handleSync = async () => {
+    setIsSyncing(true);
+    // Simple logic: Try to pull. If empty/fails, push.
+    // Ideally we ask user, but for now let's "Sync" = Merge from cloud, then Push latest.
+    try {
+      const pullSuccess = await syncFromCloud(username);
+      if (pullSuccess) toast.success("Synced from cloud");
+
+      const pushSuccess = await syncToCloud(username);
+      if (pushSuccess) {
+        if (!pullSuccess) toast.success("Synced to cloud");
+      } else {
+        toast.error("Failed to sync to cloud");
+      }
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
   const { data: session } = authClient.useSession();
 
   useEffect(() => {
@@ -293,7 +318,7 @@ export function UserPageClient({ username }: UserPageClientProps) {
       // Range selection
       const start = Math.min(lastSelectedIndex, index);
       const end = Math.max(lastSelectedIndex, index);
-      const range = potentialUnfollows
+      const range = sortedPotentialUnfollows
         .slice(start, end + 1)
         .map((u) => u.login);
 
@@ -320,13 +345,17 @@ export function UserPageClient({ username }: UserPageClientProps) {
     if (getTierLimit(plan, "maxSweepCount") !== Infinity) return;
 
     // Select all visible potential unfollows
-    const allLogins = potentialUnfollows.map((u) => u.login);
+    const allLogins = sortedPotentialUnfollows.map((u) => u.login);
     if (selectedSweepUsers.length === allLogins.length) {
       setSelectedSweepUsers([]);
     } else {
       setSelectedSweepUsers(allLogins);
     }
   };
+
+  useEffect(() => {
+    setLastSelectedIndex(-1);
+  }, [sortDescending]);
 
   useEffect(() => {
     fetchAllData();
@@ -345,6 +374,11 @@ export function UserPageClient({ username }: UserPageClientProps) {
     });
   }, [followers, searchQuery]);
 
+  const sortedFollowers = useMemo(() => {
+    const list = [...filteredFollowers];
+    return sortDescending ? list : list.reverse();
+  }, [filteredFollowers, sortDescending]);
+
   const filteredFollowing = useMemo(() => {
     const filtered = following
       .filter((f) => !pendingUnfollows.includes(f.login))
@@ -357,6 +391,11 @@ export function UserPageClient({ username }: UserPageClientProps) {
       return bTime - aTime;
     });
   }, [following, searchQuery, pendingUnfollows]);
+
+  const sortedFollowing = useMemo(() => {
+    const list = [...filteredFollowing];
+    return sortDescending ? list : list.reverse();
+  }, [filteredFollowing, sortDescending]);
 
   const whitelist = useMemo(
     () => whitelists[username] || [],
@@ -374,6 +413,11 @@ export function UserPageClient({ username }: UserPageClientProps) {
         .sort((a, b) => (b.firstSeenAt || 0) - (a.firstSeenAt || 0)),
     [following, followers, pendingUnfollows, searchQuery]
   );
+
+  const sortedPotentialUnfollows = useMemo(() => {
+    const list = [...potentialUnfollows];
+    return sortDescending ? list : list.reverse();
+  }, [potentialUnfollows, sortDescending]);
 
   if (loadingStates.stats && !stats) {
     return (
@@ -462,7 +506,28 @@ export function UserPageClient({ username }: UserPageClientProps) {
   return (
     <div className="min-h-screen bg-background p-4 md:p-8">
       <div className="max-w-6xl mx-auto space-y-8">
-        <div className="flex justify-end mb-4">
+        <div className="flex justify-end mb-4 gap-2">
+          <Button
+            variant="outline"
+            onClick={() => setSortDescending(!sortDescending)}
+            className="gap-2 rounded-xl"
+          >
+            <ArrowUpDown className="w-4 h-4" />
+            {sortDescending ? "Default" : "Reverse"}
+          </Button>
+
+          <Button
+            variant="outline"
+            onClick={handleSync}
+            disabled={isSyncing}
+            className="gap-2 rounded-xl"
+          >
+            <CloudUpload
+              className={`w-4 h-4 ${isSyncing ? "animate-bounce" : ""}`}
+            />
+            Sync
+          </Button>
+
           <Button
             variant="outline"
             onClick={() => fetchAllData(true)}
@@ -472,7 +537,7 @@ export function UserPageClient({ username }: UserPageClientProps) {
             <RefreshCw
               className={`w-4 h-4 ${isRefreshing ? "animate-spin" : ""}`}
             />
-            Refresh Data
+            Reload
           </Button>
         </div>
 
@@ -510,7 +575,7 @@ export function UserPageClient({ username }: UserPageClientProps) {
                               : "text-primary"
                           }`}
                         >
-                          {plan === "PRO" ? "SUPPORTER TIER" : "FREE TIER"}
+                          {plan === "PRO" ? "PRO TIER" : "FREE TIER"}
                         </Badge>
                       </div>
                       <p className="text-2xl text-zinc-400 font-bold tracking-tight">
@@ -599,7 +664,7 @@ export function UserPageClient({ username }: UserPageClientProps) {
 
           <TabsContent value="followers" className="m-0 space-y-6">
             <UserGrid
-              users={filteredFollowers}
+              users={sortedFollowers}
               onToggleWhitelist={handleToggleWhitelist}
               whitelist={whitelist}
               isLoading={loadingStates.followers}
@@ -609,7 +674,7 @@ export function UserPageClient({ username }: UserPageClientProps) {
 
           <TabsContent value="following" className="m-0 space-y-6">
             <UserGrid
-              users={filteredFollowing}
+              users={sortedFollowing}
               onToggleWhitelist={handleToggleWhitelist}
               whitelist={whitelist}
               showFollowBackStatus={followers}
@@ -676,7 +741,7 @@ export function UserPageClient({ username }: UserPageClientProps) {
                   <CardContent className="p-6 relative z-10">
                     <div className="py-4">
                       <UserGrid
-                        users={potentialUnfollows}
+                        users={sortedPotentialUnfollows}
                         onToggleWhitelist={handleToggleWhitelist}
                         whitelist={whitelist}
                         isLoading={
