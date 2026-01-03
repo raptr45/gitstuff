@@ -1,6 +1,7 @@
 "use client";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -12,6 +13,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { authClient } from "@/lib/auth-client";
+import { AppUser } from "@/lib/types";
 import { Contrast, Database, Github, LogOut, Search, User } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -66,23 +68,43 @@ export function Navbar() {
           {session ? (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" className="relative h-8 w-8 rounded-full">
+                <Button
+                  variant="ghost"
+                  className="relative h-8 w-8 rounded-full"
+                >
                   <Avatar className="h-8 w-8 ring-2 ring-border">
-                    <AvatarImage src={session.user.image || ""} alt={session.user.name || ""} />
+                    <AvatarImage
+                      src={session.user.image || ""}
+                      alt={session.user.name || ""}
+                    />
                     <AvatarFallback>{session.user.name?.[0]}</AvatarFallback>
                   </Avatar>
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent className="w-64 p-2" align="end" forceMount>
                 <DropdownMenuLabel className="font-normal mb-2">
-                  <div className="flex flex-col space-y-1">
-                    <p className="text-sm font-medium leading-none">{session.user.name}</p>
-                    <p className="text-xs leading-none text-muted-foreground">
-                      {`@${(session.user as any).username}` || session.user.email}
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm font-medium leading-none">
+                      {session.user.name}
                     </p>
+                    <Badge
+                      variant="secondary"
+                      className={`text-[10px] h-4 px-1 ${
+                        (session.user as AppUser).plan === "PRO"
+                          ? "bg-purple-500/10 text-purple-500 border-purple-500/20"
+                          : "bg-zinc-500/10 text-zinc-500 border-zinc-500/20"
+                      }`}
+                    >
+                      {(session.user as AppUser).plan || "FREE"}
+                    </Badge>
                   </div>
+                  <p className="text-xs leading-none text-muted-foreground">
+                    {(session.user as AppUser).username
+                      ? `@${(session.user as AppUser).username}`
+                      : session.user.email}
+                  </p>
                 </DropdownMenuLabel>
-                
+
                 <div className="flex items-center justify-between px-2 py-1.5">
                   {/* lets add a contrast icon here */}
                   <div className="flex items-center gap-2">
@@ -91,27 +113,29 @@ export function Navbar() {
                   </div>
                   <ThemeSwitcher />
                 </div>
-                
+
                 <DropdownMenuSeparator className="my-2" />
-                
+
                 <DropdownMenuItem asChild>
-                    <Link href="/" className="cursor-pointer">
-                        <User className="mr-2 h-4 w-4" />
-                        <span>Profile</span>
-                    </Link>
+                  <Link href="/" className="cursor-pointer">
+                    <User className="mr-2 h-4 w-4" />
+                    <span>Profile</span>
+                  </Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild>
-                    <Link href="/manage-data" className="cursor-pointer">
-                        <Database className="mr-2 h-4 w-4" />
-                        <span>Manage Data</span>
-                    </Link>
+                  <Link href="/manage-data" className="cursor-pointer">
+                    <Database className="mr-2 h-4 w-4" />
+                    <span>Manage Data</span>
+                  </Link>
                 </DropdownMenuItem>
-                
+
                 <DropdownMenuSeparator className="my-2" />
-                
+
                 <DropdownMenuItem
-                    className="font-semibold text-red-400 focus:text-red-500 cursor-pointer" 
-                    onClick={() => authClient.signOut().then(() => window.location.reload())}
+                  className="font-semibold text-red-400 focus:text-red-500 cursor-pointer"
+                  onClick={() =>
+                    authClient.signOut().then(() => window.location.reload())
+                  }
                 >
                   <LogOut className="mr-2 h-4 w-4" />
                   <span>Log out</span>

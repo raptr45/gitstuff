@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import { GitHubUserSummary } from "./types";
+import { GitHubUserSummary, Plan } from "./types";
 
 // Extended user with timestamp
 export interface GitHubUserWithTimestamp extends GitHubUserSummary {
@@ -15,6 +15,7 @@ interface UserState {
   whitelists: Record<string, string[]>; // targetUsername -> whitelistedLogins[]
   followerTimestamps: Record<string, UserTimestamps>; // targetUsername -> {login -> timestamp}
   followingTimestamps: Record<string, UserTimestamps>; // targetUsername -> {login -> timestamp}
+  plan: Plan;
 
   // Actions
   toggleWhitelist: (targetUsername: string, userToWhitelist: string) => void;
@@ -34,6 +35,7 @@ interface UserState {
 
   setWhitelists: (whitelists: Record<string, string[]>) => void;
   updateUserWhitelist: (targetUsername: string, logins: string[]) => void;
+  setPlan: (plan: Plan) => void;
 }
 
 export const useStore = create<UserState>()(
@@ -42,6 +44,7 @@ export const useStore = create<UserState>()(
       whitelists: {},
       followerTimestamps: {},
       followingTimestamps: {},
+      plan: "FREE",
 
       toggleWhitelist: (target, login) => {
         set((state) => {
@@ -124,6 +127,8 @@ export const useStore = create<UserState>()(
         set((state) => ({
           whitelists: { ...state.whitelists, [target]: logins },
         })),
+
+      setPlan: (plan) => set({ plan }),
     }),
     {
       name: "gitstuff-storage",

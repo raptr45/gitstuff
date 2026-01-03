@@ -5,6 +5,7 @@ import { useCallback, useState } from "react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Tooltip,
   TooltipContent,
@@ -31,6 +32,14 @@ interface UserGridProps {
   isLoading?: boolean;
   variant?: "default" | "danger";
   unfollowingLogins?: string[];
+  selectionMode?: boolean;
+  selectedUsers?: string[];
+  onSelect?: (
+    login: string,
+    checked: boolean,
+    index: number,
+    shiftKey: boolean
+  ) => void;
 }
 
 export function UserGrid({
@@ -42,6 +51,9 @@ export function UserGrid({
   isLoading,
   variant = "default",
   unfollowingLogins = [],
+  selectionMode = false,
+  selectedUsers = [],
+  onSelect,
 }: UserGridProps) {
   const [visibleCount, setVisibleCount] = useState(20);
 
@@ -96,7 +108,7 @@ export function UserGrid({
   return (
     <div className="space-y-8">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {visibleUsers.map((user) => {
+        {visibleUsers.map((user, index) => {
           const isWl = whitelist.includes(user.login);
           const followsBack = showFollowBackStatus?.some(
             (f) => f.login === user.login
@@ -114,6 +126,18 @@ export function UserGrid({
               }`}
             >
               <div className="flex items-center gap-4">
+                {selectionMode && onSelect && (
+                  <Checkbox
+                    checked={selectedUsers.includes(user.login)}
+                    onCheckedChange={(checked) => {
+                      const shiftKey =
+                        (window.event as MouseEvent | undefined)?.shiftKey ||
+                        false;
+                      onSelect(user.login, checked as boolean, index, shiftKey);
+                    }}
+                    className="w-5 h-5 rounded-md border-zinc-500/30 data-[state=checked]:bg-primary data-[state=checked]:border-primary"
+                  />
+                )}
                 <div className="relative">
                   <Avatar className="w-16 h-16 ring-4 ring-white dark:ring-zinc-950 shadow-xl transition-transform duration-300 group-hover:scale-105">
                     <AvatarImage src={user.avatar_url} />

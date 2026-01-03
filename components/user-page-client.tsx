@@ -24,9 +24,16 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { UserGrid } from "@/components/user-grid";
 import { authClient } from "@/lib/auth-client";
 import { useStore, type GitHubUserWithTimestamp } from "@/lib/store";
-import { APIResponse, GitHubUserSummary, UserStats } from "@/lib/types";
+import { getTierLimit } from "@/lib/tier-limits";
+import {
+  APIResponse,
+  AppUser,
+  GitHubUserSummary,
+  UserStats,
+} from "@/lib/types";
 import {
   BookMarked,
+  Brush,
   RefreshCw,
   Search,
   ShieldAlert,
@@ -47,12 +54,18 @@ export function UserPageClient({ username }: UserPageClientProps) {
     trackFollowing,
     isWhitelisted,
     updateUserWhitelist,
+    plan,
+    setPlan,
   } = useStore();
 
   const [stats, setStats] = useState<UserStats | null>(null);
   const [followers, setFollowers] = useState<GitHubUserWithTimestamp[]>([]);
   const [following, setFollowing] = useState<GitHubUserWithTimestamp[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
+  const [isSweepMode, setIsSweepMode] = useState(false);
+  const [selectedSweepUsers, setSelectedSweepUsers] = useState<string[]>([]);
+  const [lastSelectedIndex, setLastSelectedIndex] = useState<number>(-1);
+  const [isSweeping, setIsSweeping] = useState(false);
 
   const [loadingStates, setLoadingStates] = useState({
     stats: true,
@@ -175,7 +188,13 @@ export function UserPageClient({ username }: UserPageClientProps) {
     [fetchStats, fetchLists, fetchWhitelist]
   );
 
-  authClient.useSession();
+  const { data: session } = authClient.useSession();
+
+  useEffect(() => {
+    if (session?.user) {
+      setPlan((session.user as AppUser).plan || "FREE");
+    }
+  }, [session, setPlan]);
 
   const handleUnfollow = useCallback(async (targetLogin: string) => {
     setPendingUnfollows((prev) => [...prev, targetLogin]);
@@ -230,6 +249,85 @@ export function UserPageClient({ username }: UserPageClientProps) {
     [username, toggleWhitelist]
   );
 
+  const handleSweep = async () => {
+    if (selectedSweepUsers.length === 0) return;
+    setIsSweeping(true);
+    try {
+      const res = await fetch("/api/actions/sweep", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ targets: selectedSweepUsers }),
+      });
+      const data = await res.json();
+
+      if (!data.success) {
+        toast.error(data.error || "Sweep failed");
+      } else {
+        toast.success(`Succesfully swept ${data.data.successful} users.`);
+        // Remove from local state
+        setFollowers((prev) =>
+          prev.filter((u) => !selectedSweepUsers.includes(u.login))
+        );
+        setFollowing((prev) =>
+          prev.filter((u) => !selectedSweepUsers.includes(u.login))
+        );
+        setSelectedSweepUsers([]);
+        setIsSweepMode(false);
+        // Stats will update on next refresh or manual trigger, but lists are clean now.
+      }
+    } catch (e) {
+      console.error("Sweep error", e);
+      toast.error("Failed to sweep");
+    } finally {
+      setIsSweeping(false);
+    }
+  };
+
+  const toggleSweepSelection = (
+    login: string,
+    checked: boolean,
+    index?: number,
+    shiftKey?: boolean
+  ) => {
+    if (shiftKey && index !== undefined && lastSelectedIndex !== -1) {
+      // Range selection
+      const start = Math.min(lastSelectedIndex, index);
+      const end = Math.max(lastSelectedIndex, index);
+      const range = potentialUnfollows
+        .slice(start, end + 1)
+        .map((u) => u.login);
+
+      setSelectedSweepUsers((prev) => {
+        const newSet = new Set(prev);
+        if (checked) {
+          range.forEach((l) => newSet.add(l));
+        } else {
+          range.forEach((l) => newSet.delete(l));
+        }
+        return Array.from(newSet);
+      });
+    } else {
+      if (checked) {
+        setSelectedSweepUsers((prev) => [...prev, login]);
+      } else {
+        setSelectedSweepUsers((prev) => prev.filter((l) => l !== login));
+      }
+    }
+    if (index !== undefined) setLastSelectedIndex(index);
+  };
+
+  const handleSelectAll = () => {
+    if (getTierLimit(plan, "maxSweepCount") !== Infinity) return;
+
+    // Select all visible potential unfollows
+    const allLogins = potentialUnfollows.map((u) => u.login);
+    if (selectedSweepUsers.length === allLogins.length) {
+      setSelectedSweepUsers([]);
+    } else {
+      setSelectedSweepUsers(allLogins);
+    }
+  };
+
   useEffect(() => {
     fetchAllData();
   }, [fetchAllData]);
@@ -270,8 +368,11 @@ export function UserPageClient({ username }: UserPageClientProps) {
       following
         .filter((ing) => !pendingUnfollows.includes(ing.login))
         .filter((ing) => !followers.some((f) => f.login === ing.login))
+        .filter((ing) =>
+          ing.login.toLowerCase().includes(searchQuery.toLowerCase())
+        )
         .sort((a, b) => (b.firstSeenAt || 0) - (a.firstSeenAt || 0)),
-    [following, followers, pendingUnfollows]
+    [following, followers, pendingUnfollows, searchQuery]
   );
 
   if (loadingStates.stats && !stats) {
@@ -403,9 +504,13 @@ export function UserPageClient({ username }: UserPageClientProps) {
                         </CardTitle>
                         <Badge
                           variant="outline"
-                          className="rounded-full px-4 py-1 border-primary/20 bg-primary/5 text-primary font-black uppercase text-[10px] tracking-widest"
+                          className={`rounded-full px-4 py-1 border-primary/20 bg-primary/5 font-black uppercase text-[10px] tracking-widest ${
+                            plan === "PRO"
+                              ? "text-purple-500 bg-purple-500/10 border-purple-500/20"
+                              : "text-primary"
+                          }`}
                         >
-                          Active User
+                          {plan === "PRO" ? "SUPPORTER TIER" : "FREE TIER"}
                         </Badge>
                       </div>
                       <p className="text-2xl text-zinc-400 font-bold tracking-tight">
@@ -521,7 +626,7 @@ export function UserPageClient({ username }: UserPageClientProps) {
                 <Card className="relative border-none shadow-2xl bg-white/80 dark:bg-zinc-950/80 backdrop-blur-3xl rounded-[2rem] overflow-hidden">
                   <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/10 blur-[60px] rounded-full -mr-10 -mt-10 animate-pulse"></div>
                   <CardHeader className="border-b border-zinc-500/10 pb-6 relative z-10">
-                    <div className="flex items-center justify-between">
+                    <div className="flex flex-col md:flex-row items-center justify-between gap-4">
                       <div className="space-y-1">
                         <div className="flex items-center gap-3">
                           <div className="p-2.5 bg-red-600 rounded-xl shadow-[0_0_20px_rgba(37,99,235,0.3)]">
@@ -535,30 +640,94 @@ export function UserPageClient({ username }: UserPageClientProps) {
                           Identify unreciprocal following
                         </CardDescription>
                       </div>
+
+                      {potentialUnfollows.length > 0 && (
+                        <div className="flex items-center gap-2">
+                          {isSweepMode && plan === "PRO" && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={handleSelectAll}
+                              className="mr-2 h-8 text-xs font-bold"
+                            >
+                              {selectedSweepUsers.length ===
+                              potentialUnfollows.length
+                                ? "Deselect All"
+                                : "Select All"}
+                            </Button>
+                          )}
+                          <Button
+                            variant={isSweepMode ? "secondary" : "default"}
+                            size="sm"
+                            onClick={() => {
+                              setIsSweepMode(!isSweepMode);
+                              setSelectedSweepUsers([]);
+                              setLastSelectedIndex(-1);
+                            }}
+                            className="rounded-xl font-bold h-9"
+                          >
+                            <Brush className="w-4 h-4 mr-2" />
+                            {isSweepMode ? "Done" : "Sweep"}
+                          </Button>
+                        </div>
+                      )}
                     </div>
                   </CardHeader>
                   <CardContent className="p-6 relative z-10">
-                    <UserGrid
-                      users={potentialUnfollows}
-                      onToggleWhitelist={handleToggleWhitelist}
-                      whitelist={whitelist}
-                      isLoading={
-                        loadingStates.following || loadingStates.followers
-                      }
-                      variant="danger"
-                      unfollowingLogins={pendingUnfollows}
-                      onUnfollow={(login) => {
-                        if (isWhitelisted(username, login)) {
-                          toast.error(
-                            "User is Shielded. Remove protection first to unfollow."
-                          );
-                          return;
+                    <div className="py-4">
+                      <UserGrid
+                        users={potentialUnfollows}
+                        onToggleWhitelist={handleToggleWhitelist}
+                        whitelist={whitelist}
+                        isLoading={
+                          loadingStates.following || loadingStates.followers
                         }
-                        handleUnfollow(login);
-                      }}
-                    />
+                        variant="danger"
+                        unfollowingLogins={pendingUnfollows}
+                        selectionMode={isSweepMode}
+                        selectedUsers={selectedSweepUsers}
+                        onSelect={toggleSweepSelection}
+                        onUnfollow={(login) => {
+                          if (isWhitelisted(username, login)) {
+                            toast.error(
+                              "User is Shielded. Remove protection first to unfollow."
+                            );
+                            return;
+                          }
+                          handleUnfollow(login);
+                        }}
+                      />
+                    </div>
                   </CardContent>
                 </Card>
+
+                {isSweepMode && (
+                  <div className="fixed bottom-0 left-0 right-0 p-4 bg-background/95 backdrop-blur-md border-t border-border flex items-center justify-between z-50 animate-in slide-in-from-bottom-10 fade-in duration-300">
+                    <div className="container mx-auto max-w-6xl flex justify-between items-center">
+                      <div className="text-sm font-medium opacity-70">
+                        {selectedSweepUsers.length} users selected
+                        {plan === "FREE" && (
+                          <span className="ml-2 text-amber-500 font-bold">
+                            (Max {getTierLimit(plan, "maxSweepCount")})
+                          </span>
+                        )}
+                      </div>
+                      <Button
+                        variant="destructive"
+                        disabled={selectedSweepUsers.length === 0 || isSweeping}
+                        onClick={handleSweep}
+                        className="rounded-xl font-bold px-8 shadow-lg shadow-red-500/20"
+                      >
+                        {isSweeping ? (
+                          <RefreshCw className="w-4 h-4 animate-spin mr-2" />
+                        ) : (
+                          <Brush className="w-4 h-4 mr-2" />
+                        )}
+                        Execute Sweep
+                      </Button>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </TabsContent>
@@ -590,6 +759,25 @@ export function UserPageClient({ username }: UserPageClientProps) {
                   </Badge>
                 </CardHeader>
                 <CardContent className="p-0">
+                  {plan === "FREE" &&
+                    whitelist.length >=
+                      (getTierLimit("FREE", "maxWhitelist") as number) && (
+                      <div className="p-4 bg-amber-500/10 border-b border-amber-500/20 flex flex-col md:flex-row items-center justify-between gap-4">
+                        <div className="flex items-center gap-3 text-amber-600 dark:text-amber-500">
+                          <ShieldAlert className="w-5 h-5" />
+                          <span className="font-bold text-sm">
+                            Free limit reached (10 users). Upgrade to Supporter
+                            for unlimited protection.
+                          </span>
+                        </div>
+                        <Button
+                          size="sm"
+                          className="bg-amber-500 hover:bg-amber-600 text-white border-none font-bold"
+                        >
+                          Become a Supporter
+                        </Button>
+                      </div>
+                    )}
                   <Table>
                     <TableHeader>
                       <TableRow className="hover:bg-transparent border-zinc-500/10">

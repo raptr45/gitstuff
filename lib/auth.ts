@@ -11,6 +11,11 @@ export const auth = betterAuth({
       username: {
         type: "string",
       },
+      plan: {
+        type: "string",
+        defaultValue: "FREE",
+        input: false,
+      },
     },
   },
   socialProviders: {
