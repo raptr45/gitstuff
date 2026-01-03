@@ -1,6 +1,7 @@
 datasource db {
   provider = "postgresql"
 }
+
 generator client {
   provider = "prisma-client-js"
 }
@@ -11,27 +12,28 @@ enum Plan {
 }
 
 model User {
-  id            String    @id
-  name          String
-  email         String    @unique
-  emailVerified Boolean
-  image         String?
-  username      String?
-  createdAt     DateTime
-  updatedAt     DateTime
-  sessions      Session[]
-  accounts      Account[]
-  whitelists    Whitelist[]
-  followerHistory FollowerHistory[]
-  plan          Plan      @default(FREE)
+  id               String            @id
+  name             String
+  email            String            @unique
+  emailVerified    Boolean
+  image            String?
+  username         String?
+  createdAt        DateTime
+  updatedAt        DateTime
+  sessions         Session[]
+  accounts         Account[]
+  whitelists       Whitelist[]
+  followerHistory  FollowerHistory[]
+  plan             Plan              @default(FREE)
+  followerSnapshot FollowerSnapshot?
 
   @@map("user")
 }
 
 model Whitelist {
-  id             String @id @default(cuid())
+  id             String   @id @default(cuid())
   userId         String
-  user           User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   targetUsername String
   whiteListed    String
   createdAt      DateTime @default(now())
@@ -74,7 +76,7 @@ model Account {
 }
 
 model Verification {
-  id         String   @id
+  id         String    @id
   identifier String
   value      String
   expiresAt  DateTime
@@ -85,12 +87,23 @@ model Verification {
 }
 
 model FollowerHistory {
-  id        String   @id @default(cuid())
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  count     Int
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  count      Int
   recordedAt DateTime @default(now())
 
   @@index([userId])
   @@map("follower_history")
+}
+
+model FollowerSnapshot {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  followers Json
+  following Json
+  updatedAt DateTime @updatedAt
+
+  @@map("follower_snapshot")
 }
