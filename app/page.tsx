@@ -60,9 +60,9 @@ export default function Home() {
           <div className="relative">
             <div className="absolute -inset-4 bg-primary/20 blur-2xl rounded-full animate-pulse"></div>
             <div className="w-12 h-12 rounded-full border-4 border-primary/20 border-t-primary animate-spin" />
-            <div className="absolute top-full mt-4 w-64 text-center text-sm text-muted-foreground font-medium animate-pulse">
+            {/* <div className="absolute top-full mt-4 w-64 text-center text-sm text-muted-foreground font-medium animate-pulse">
               Syncing GitHub profile...
-            </div>
+            </div> */}
           </div>
         </div>
       </div>
