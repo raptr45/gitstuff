@@ -1,5 +1,10 @@
 # GitStuff 🐱
 
+![Next.js](https://img.shields.io/badge/Next.js-16.1-black?style=for-the-badge&logo=next.js&logoColor=white)
+![React](https://img.shields.io/badge/React-19-blue?style=for-the-badge&logo=react&logoColor=white)
+![TypeScript](https://img.shields.io/badge/TypeScript-5-blue?style=for-the-badge&logo=typescript&logoColor=white)
+![License](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)
+
 **GitStuff** is a easy GitHub follower management tool. Identify unfollowers, track growth, and protect your social circle.
 
 ## ✨ Features
