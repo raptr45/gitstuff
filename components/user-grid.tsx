@@ -41,6 +41,7 @@ interface UserGridProps {
     index: number,
     shiftKey: boolean
   ) => void;
+  isFollowersTab?: boolean;
 }
 
 export function UserGrid({
@@ -55,6 +56,7 @@ export function UserGrid({
   selectionMode = false,
   selectedUsers = [],
   onSelect,
+  isFollowersTab = false,
 }: UserGridProps) {
   const [visibleCount, setVisibleCount] = useState(20);
   const [now] = useState(() => Date.now());
@@ -241,7 +243,11 @@ export function UserGrid({
                           variant="ghost"
                           size="icon"
                           onClick={() => !isWl && onUnfollow(user.login)}
-                          disabled={isWl || isUnfollowing}
+                          disabled={
+                            isWl ||
+                            isUnfollowing ||
+                            (isFollowersTab && !followsBack)
+                          }
                           className={`h-11 w-11 rounded-2xl transition-all duration-300 ${
                             isWl
                               ? "opacity-50 cursor-not-allowed bg-zinc-500/5 text-zinc-400"
