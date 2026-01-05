@@ -10,7 +10,9 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Table,
@@ -70,6 +72,14 @@ export function UserPageClient({ username }: UserPageClientProps) {
   const [selectedSweepUsers, setSelectedSweepUsers] = useState<string[]>([]);
   const [lastSelectedIndex, setLastSelectedIndex] = useState<number>(-1);
   const [isSweeping, setIsSweeping] = useState(false);
+  const [activeTab, setActiveTab] = useState("followers");
+  const [excludeProtected, setExcludeProtected] = useState(true);
+
+  useEffect(() => {
+    setSelectedSweepUsers([]);
+    setLastSelectedIndex(-1);
+    setIsSweepMode(false);
+  }, [activeTab]);
 
   const [loadingStates, setLoadingStates] = useState({
     stats: true,
@@ -277,11 +287,21 @@ export function UserPageClient({ username }: UserPageClientProps) {
   const handleSweep = async () => {
     if (selectedSweepUsers.length === 0) return;
     setIsSweeping(true);
+    const finalTargets = excludeProtected
+      ? selectedSweepUsers.filter((login) => !whitelist.includes(login))
+      : selectedSweepUsers;
+
+    if (finalTargets.length === 0) {
+      toast.error("No valid users selected for bulk action.");
+      setIsSweeping(false);
+      return;
+    }
+
     try {
       const res = await fetch("/api/actions/sweep", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ targets: selectedSweepUsers }),
+        body: JSON.stringify({ targets: finalTargets }),
       });
       const data = await res.json();
 
@@ -312,15 +332,17 @@ export function UserPageClient({ username }: UserPageClientProps) {
     login: string,
     checked: boolean,
     index?: number,
-    shiftKey?: boolean
+    shiftKey?: boolean,
+    currentUsers: (
+      | GitHubUserSummary
+      | GitHubUserWithTimestamp
+    )[] = sortedPotentialUnfollows
   ) => {
     if (shiftKey && index !== undefined && lastSelectedIndex !== -1) {
       // Range selection
       const start = Math.min(lastSelectedIndex, index);
       const end = Math.max(lastSelectedIndex, index);
-      const range = sortedPotentialUnfollows
-        .slice(start, end + 1)
-        .map((u) => u.login);
+      const range = currentUsers.slice(start, end + 1).map((u) => u.login);
 
       setSelectedSweepUsers((prev) => {
         const newSet = new Set(prev);
@@ -341,15 +363,34 @@ export function UserPageClient({ username }: UserPageClientProps) {
     if (index !== undefined) setLastSelectedIndex(index);
   };
 
-  const handleSelectAll = () => {
+  const handleSelectAll = (
+    currentUsers: (GitHubUserSummary | GitHubUserWithTimestamp)[]
+  ) => {
     if (getTierLimit(plan, "maxSweepCount") !== Infinity) return;
 
-    // Select all visible potential unfollows
-    const allLogins = sortedPotentialUnfollows.map((u) => u.login);
-    if (selectedSweepUsers.length === allLogins.length) {
-      setSelectedSweepUsers([]);
+    // Filter out whitelisted if needed
+    const usersToSelect = excludeProtected
+      ? currentUsers.filter((u) => !whitelist.includes(u.login))
+      : currentUsers;
+
+    const allLogins = usersToSelect.map((u) => u.login);
+
+    // If all that should be selected are already selected, clear selection.
+    // Otherwise, select missing ones.
+    const isAllSelected = allLogins.every((l) =>
+      selectedSweepUsers.includes(l)
+    );
+
+    if (isAllSelected) {
+      // Deselect only these ones
+      setSelectedSweepUsers((prev) =>
+        prev.filter((l) => !allLogins.includes(l))
+      );
     } else {
-      setSelectedSweepUsers(allLogins);
+      setSelectedSweepUsers((prev) => {
+        const newSet = new Set([...prev, ...allLogins]);
+        return Array.from(newSet);
+      });
     }
   };
 
@@ -622,7 +663,11 @@ export function UserPageClient({ username }: UserPageClientProps) {
           </div>
         )}
 
-        <Tabs defaultValue="followers" className="w-full">
+        <Tabs
+          defaultValue="followers"
+          className="w-full"
+          onValueChange={setActiveTab}
+        >
           <div className="flex flex-col md:flex-row justify-between items-center gap-4 mb-6 sticky top-0 bg-background/80 backdrop-blur-md z-10 py-4 border-b">
             <TabsList className="grid grid-cols-2 md:grid-cols-4 w-full md:w-auto p-1 bg-muted/50">
               <TabsTrigger
@@ -663,16 +708,112 @@ export function UserPageClient({ username }: UserPageClientProps) {
           </div>
 
           <TabsContent value="followers" className="m-0 space-y-6">
+            <div className="flex justify-between items-center px-4 py-2 bg-muted/20 rounded-2xl border border-border/50">
+              <div className="text-sm font-bold text-muted-foreground uppercase tracking-widest">
+                Identities following you
+              </div>
+              {followers.length > 0 && (
+                <div className="flex items-center gap-2">
+                  {isSweepMode && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      type="button"
+                      onClick={() => handleSelectAll(sortedFollowers)}
+                      className="mr-2 h-8 text-xs font-bold"
+                    >
+                      {sortedFollowers.every((u) =>
+                        selectedSweepUsers.includes(u.login)
+                      )
+                        ? "Deselect All"
+                        : "Select All"}
+                    </Button>
+                  )}
+                  <Button
+                    variant={
+                      isSweepMode && activeTab === "followers"
+                        ? "secondary"
+                        : "ghost"
+                    }
+                    size="sm"
+                    onClick={() => {
+                      if (activeTab !== "followers") setActiveTab("followers");
+                      setIsSweepMode(!isSweepMode);
+                      setSelectedSweepUsers([]);
+                      setLastSelectedIndex(-1);
+                    }}
+                    className="rounded-xl font-bold h-9"
+                  >
+                    <Brush className="w-4 h-4 mr-2" />
+                    {isSweepMode && activeTab === "followers"
+                      ? "Done"
+                      : "Bulk Action"}
+                  </Button>
+                </div>
+              )}
+            </div>
             <UserGrid
               users={sortedFollowers}
               onToggleWhitelist={handleToggleWhitelist}
               whitelist={whitelist}
               isLoading={loadingStates.followers}
               unfollowingLogins={pendingUnfollows}
+              onUnfollow={handleUnfollow}
+              showFollowBackStatus={following}
+              isFollowersTab={true}
+              selectionMode={isSweepMode && activeTab === "followers"}
+              selectedUsers={selectedSweepUsers}
+              onSelect={(l, c, i, s) =>
+                toggleSweepSelection(l, c, i, s, sortedFollowers)
+              }
             />
           </TabsContent>
 
           <TabsContent value="following" className="m-0 space-y-6">
+            <div className="flex justify-between items-center px-4 py-2 bg-muted/20 rounded-2xl border border-border/50">
+              <div className="text-sm font-bold text-muted-foreground uppercase tracking-widest">
+                Identities you track
+              </div>
+              {following.length > 0 && (
+                <div className="flex items-center gap-2">
+                  {isSweepMode && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      type="button"
+                      onClick={() => handleSelectAll(sortedFollowing)}
+                      className="mr-2 h-8 text-xs font-bold"
+                    >
+                      {sortedFollowing.every((u) =>
+                        selectedSweepUsers.includes(u.login)
+                      )
+                        ? "Deselect All"
+                        : "Select All"}
+                    </Button>
+                  )}
+                  <Button
+                    variant={
+                      isSweepMode && activeTab === "following"
+                        ? "secondary"
+                        : "ghost"
+                    }
+                    size="sm"
+                    onClick={() => {
+                      if (activeTab !== "following") setActiveTab("following");
+                      setIsSweepMode(!isSweepMode);
+                      setSelectedSweepUsers([]);
+                      setLastSelectedIndex(-1);
+                    }}
+                    className="rounded-xl font-bold h-9"
+                  >
+                    <Brush className="w-4 h-4 mr-2" />
+                    {isSweepMode && activeTab === "following"
+                      ? "Done"
+                      : "Bulk Action"}
+                  </Button>
+                </div>
+              )}
+            </div>
             <UserGrid
               users={sortedFollowing}
               onToggleWhitelist={handleToggleWhitelist}
@@ -680,6 +821,12 @@ export function UserPageClient({ username }: UserPageClientProps) {
               showFollowBackStatus={followers}
               isLoading={loadingStates.following}
               unfollowingLogins={pendingUnfollows}
+              onUnfollow={handleUnfollow}
+              selectionMode={isSweepMode && activeTab === "following"}
+              selectedUsers={selectedSweepUsers}
+              onSelect={(l, c, i, s) =>
+                toggleSweepSelection(l, c, i, s, sortedFollowing)
+              }
             />
           </TabsContent>
 
@@ -708,23 +855,33 @@ export function UserPageClient({ username }: UserPageClientProps) {
 
                       {potentialUnfollows.length > 0 && (
                         <div className="flex items-center gap-2">
-                          {isSweepMode && plan === "PRO" && (
+                          {isSweepMode && (
                             <Button
                               variant="outline"
                               size="sm"
-                              onClick={handleSelectAll}
+                              type="button"
+                              onClick={() =>
+                                handleSelectAll(sortedPotentialUnfollows)
+                              }
                               className="mr-2 h-8 text-xs font-bold"
                             >
-                              {selectedSweepUsers.length ===
-                              potentialUnfollows.length
+                              {sortedPotentialUnfollows.every((u) =>
+                                selectedSweepUsers.includes(u.login)
+                              )
                                 ? "Deselect All"
                                 : "Select All"}
                             </Button>
                           )}
                           <Button
-                            variant={isSweepMode ? "secondary" : "default"}
+                            variant={
+                              isSweepMode && activeTab === "tracking"
+                                ? "secondary"
+                                : "default"
+                            }
                             size="sm"
                             onClick={() => {
+                              if (activeTab !== "tracking")
+                                setActiveTab("tracking");
                               setIsSweepMode(!isSweepMode);
                               setSelectedSweepUsers([]);
                               setLastSelectedIndex(-1);
@@ -732,7 +889,9 @@ export function UserPageClient({ username }: UserPageClientProps) {
                             className="rounded-xl font-bold h-9"
                           >
                             <Brush className="w-4 h-4 mr-2" />
-                            {isSweepMode ? "Done" : "Sweep"}
+                            {isSweepMode && activeTab === "tracking"
+                              ? "Done"
+                              : "Sweep"}
                           </Button>
                         </div>
                       )}
@@ -749,9 +908,17 @@ export function UserPageClient({ username }: UserPageClientProps) {
                         }
                         variant="danger"
                         unfollowingLogins={pendingUnfollows}
-                        selectionMode={isSweepMode}
+                        selectionMode={isSweepMode && activeTab === "tracking"}
                         selectedUsers={selectedSweepUsers}
-                        onSelect={toggleSweepSelection}
+                        onSelect={(l, c, i, s) =>
+                          toggleSweepSelection(
+                            l,
+                            c,
+                            i,
+                            s,
+                            sortedPotentialUnfollows
+                          )
+                        }
                         onUnfollow={(login) => {
                           if (isWhitelisted(username, login)) {
                             toast.error(
@@ -765,34 +932,6 @@ export function UserPageClient({ username }: UserPageClientProps) {
                     </div>
                   </CardContent>
                 </Card>
-
-                {isSweepMode && (
-                  <div className="fixed bottom-0 left-0 right-0 p-4 bg-background/95 backdrop-blur-md border-t border-border flex items-center justify-between z-50 animate-in slide-in-from-bottom-10 fade-in duration-300">
-                    <div className="container mx-auto max-w-6xl flex justify-between items-center">
-                      <div className="text-sm font-medium opacity-70">
-                        {selectedSweepUsers.length} users selected
-                        {plan === "FREE" && (
-                          <span className="ml-2 text-amber-500 font-bold">
-                            (Max {getTierLimit(plan, "maxSweepCount")})
-                          </span>
-                        )}
-                      </div>
-                      <Button
-                        variant="destructive"
-                        disabled={selectedSweepUsers.length === 0 || isSweeping}
-                        onClick={handleSweep}
-                        className="rounded-xl font-bold px-8 shadow-lg shadow-red-500/20"
-                      >
-                        {isSweeping ? (
-                          <RefreshCw className="w-4 h-4 animate-spin mr-2" />
-                        ) : (
-                          <Brush className="w-4 h-4 mr-2" />
-                        )}
-                        Execute Sweep
-                      </Button>
-                    </div>
-                  </div>
-                )}
               </div>
             </div>
           </TabsContent>
@@ -926,6 +1065,54 @@ export function UserPageClient({ username }: UserPageClientProps) {
             </div>
           </TabsContent>
         </Tabs>
+
+        {isSweepMode && (
+          <div className="fixed bottom-0 left-0 right-0 z-[100] m-0 p-4 bg-background/95 backdrop-blur-md border-t border-border flex items-center justify-between animate-in fade-in slide-in-from-bottom-4 duration-200">
+            <div className="container mx-auto max-w-6xl flex justify-between items-center">
+              <div className="flex items-center gap-6">
+                <div className="text-sm font-bold">
+                  {selectedSweepUsers.length} Users Selected
+                  {plan === "FREE" && (
+                    <span className="ml-2 text-amber-500 font-bold opacity-70">
+                      (Max {getTierLimit(plan, "maxSweepCount")})
+                    </span>
+                  )}
+                </div>
+
+                <div className="h-4 w-[1px] bg-border" />
+
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="exclude-protected"
+                    checked={excludeProtected}
+                    onCheckedChange={(checked: boolean | "indeterminate") =>
+                      setExcludeProtected(checked === true)
+                    }
+                  />
+                  <Label
+                    htmlFor="exclude-protected"
+                    className="text-xs font-black uppercase tracking-widest cursor-pointer opacity-70 hover:opacity-100 transition-opacity"
+                  >
+                    Ignore Shielded
+                  </Label>
+                </div>
+              </div>
+              <Button
+                variant="destructive"
+                disabled={selectedSweepUsers.length === 0 || isSweeping}
+                onClick={handleSweep}
+                className="rounded-xl font-bold px-8 shadow-lg shadow-red-500/20"
+              >
+                {isSweeping ? (
+                  <RefreshCw className="w-4 h-4 animate-spin mr-2" />
+                ) : (
+                  <Brush className="w-4 h-4 mr-2" />
+                )}
+                Execute Bulk Action
+              </Button>
+            </div>
+          </div>
+        )}
 
         <footer className="mt-20 pb-12 text-center text-sm text-muted-foreground animate-in fade-in slide-in-from-bottom-4 duration-1000">
           <div className="flex flex-col items-center gap-3">
