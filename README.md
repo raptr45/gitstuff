@@ -22,6 +22,17 @@
 - **State**: Zustand with Persistence
 - **UI**: Tailwind CSS 4 + shadcn/ui
 
+## 📂 Project Structure
+
+```text
+├── app/              # Next.js App Router & API routes
+├── components/       # Shadcn UI & custom components
+├── lib/              # Utilities (Auth, DB, Utils)
+├── prisma/           # Database schema
+├── public/           # Static assets
+└── package.json      # Project dependencies
+```
+
 ## 🚀 Getting Started
 
 ### Prerequisites
@@ -67,6 +78,30 @@
    ```bash
    pnpm dev
    ```
+
+6. **Run tests:**
+   ```bash
+   pnpm test
+   ```
+
+## 🚢 Deployment
+
+The easiest way to deploy is using [Vercel](https://vercel.com/new).
+
+1. Push your code to GitHub.
+2. Import the project in Vercel.
+3. Add your environment variables (`DATABASE_URL`, `GITHUB_CLIENT_ID`, etc.).
+4. Click **Deploy**.
+
+## 🤝 Contributing
+
+Contributions are welcome!
+
+1. Fork the project.
+2. Create your feature branch (`git checkout -b feature/AmazingFeature`).
+3. Commit your changes (`git commit -m 'Add some AmazingFeature'`).
+4. Push to the branch (`git push origin feature/AmazingFeature`).
+5. Open a Pull Request.
 
 ## 📄 License
 
