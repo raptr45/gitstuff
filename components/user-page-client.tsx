@@ -23,6 +23,9 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { BulkActionBar } from "@/components/bulk-action-bar";
+import { TargetFollowerPanel } from "@/components/target-follower-panel";
+import { ActivityFeed, type ActivityEntry } from "@/components/activity-feed";
 import { UserGrid } from "@/components/user-grid";
 import { authClient } from "@/lib/auth-client";
 import { useStore, type GitHubUserWithTimestamp } from "@/lib/store";
@@ -42,6 +45,7 @@ import {
   Search,
   ShieldAlert,
   ShieldCheck,
+  UserPlus,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -69,15 +73,18 @@ export function UserPageClient({ username }: UserPageClientProps) {
   const [following, setFollowing] = useState<GitHubUserWithTimestamp[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [isSweepMode, setIsSweepMode] = useState(false);
-  const [selectedSweepUsers, setSelectedSweepUsers] = useState<string[]>([]);
-  const [lastSelectedIndex, setLastSelectedIndex] = useState<number>(-1);
+  const [selectedSweepUsers, setSelectedSweepUsers] = useState<Set<string>>(new Set());
   const [isSweeping, setIsSweeping] = useState(false);
   const [activeTab, setActiveTab] = useState("followers");
   const [excludeProtected, setExcludeProtected] = useState(true);
+  const [bulkAction, setBulkAction] = useState<"follow" | "unfollow">("unfollow");
+  const [batchSize, setBatchSize] = useState(25);
+  const [bulkProgress, setBulkProgress] = useState<{ done: number; total: number } | null>(null);
+  const [isImportFollowing, setIsImportFollowing] = useState(false);
+  const [activityLog, setActivityLog] = useState<ActivityEntry[]>([]);
 
   useEffect(() => {
-    setSelectedSweepUsers([]);
-    setLastSelectedIndex(-1);
+    setSelectedSweepUsers(new Set());
     setIsSweepMode(false);
   }, [activeTab]);
 
@@ -284,119 +291,171 @@ export function UserPageClient({ username }: UserPageClientProps) {
     [username, toggleWhitelist]
   );
 
-  const handleSweep = async () => {
-    if (selectedSweepUsers.length === 0) return;
-    setIsSweeping(true);
+  // Activity log helpers
+  const addActivity = (entry: ActivityEntry) =>
+    setActivityLog((prev) => [entry, ...prev].slice(0, 20));
+  const updateActivity = (id: string, patch: Partial<ActivityEntry>) =>
+    setActivityLog((prev) =>
+      prev.map((e) => (e.id === id ? { ...e, ...patch } : e))
+    );
+
+  // Run bulk follow for a given list of logins (chunked, with progress)
+  const runBulkFollow = useCallback(async (logins: string[], label?: string) => {
+    // Per-request chunk size is always the tier API cap (safe rate-limit)
+    const API_CHUNK = plan === "PRO" ? 500 : 25;
+    const chunks: string[][] = [];
+    for (let i = 0; i < logins.length; i += API_CHUNK) {
+      chunks.push(logins.slice(i, i + API_CHUNK));
+    }
+    const taskId = `follow-${Date.now()}`;
+    const taskLabel = label ?? `Follow ${logins.length} users`;
+    addActivity({ id: taskId, label: taskLabel, status: "running", progress: { done: 0, total: logins.length }, timestamp: Date.now() });
+    setBulkProgress({ done: 0, total: logins.length });
+    let totalSucceeded = 0;
+    let totalFailed = 0;
+
+    for (let ci = 0; ci < chunks.length; ci++) {
+      const chunk = chunks[ci];
+      try {
+        const res = await fetch("/api/actions/bulk-follow", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ usernames: chunk }),
+        });
+        const data = await res.json();
+        if (data.success) {
+          totalSucceeded += data.succeeded ?? 0;
+          totalFailed += data.failed ?? 0;
+        } else {
+          toast.error(data.error || "Bulk follow failed");
+          updateActivity(taskId, { status: "error", result: data.error || "Failed" });
+          break;
+        }
+      } catch {
+        toast.error("Network error during bulk follow");
+        updateActivity(taskId, { status: "error", result: "Network error" });
+        break;
+      }
+      const done = Math.min((ci + 1) * API_CHUNK, logins.length);
+      setBulkProgress({ done, total: logins.length });
+      updateActivity(taskId, { progress: { done, total: logins.length } });
+      if (ci < chunks.length - 1) await new Promise((r) => setTimeout(r, 600));
+    }
+    const result = `✓ ${totalSucceeded} followed${ totalFailed > 0 ? `, ${totalFailed} failed` : "" }`;
+    updateActivity(taskId, { status: "done", result, progress: undefined });
+    toast.success(`Done! Followed ${totalSucceeded} users.${ totalFailed > 0 ? ` (${totalFailed} failed)` : "" }`);
+    setBulkProgress(null);
+  }, [plan, addActivity, updateActivity]);
+
+  const handleImportFollow = useCallback(async (logins: string[]) => {
+    setIsImportFollowing(true);
+    await runBulkFollow(logins, `Import: follow ${logins.length} users`);
+    setIsImportFollowing(false);
+  }, [runBulkFollow]);
+
+  const handleBulkExecute = async () => {
+    if (selectedSweepUsers.size === 0) return;
+    const allSelected = Array.from(selectedSweepUsers);
+    // batchSize 0 = run all; otherwise take first N
+    const sliced = batchSize === 0 ? allSelected : allSelected.slice(0, batchSize);
     const finalTargets = excludeProtected
-      ? selectedSweepUsers.filter((login) => !whitelist.includes(login))
-      : selectedSweepUsers;
+      ? sliced.filter((login) => !whitelist.includes(login))
+      : sliced;
 
     if (finalTargets.length === 0) {
       toast.error("No valid users selected for bulk action.");
-      setIsSweeping(false);
       return;
     }
 
-    try {
-      const res = await fetch("/api/actions/sweep", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ targets: finalTargets }),
-      });
-      const data = await res.json();
+    setIsSweeping(true);
 
-      if (!data.success) {
-        toast.error(data.error || "Sweep failed");
-      } else {
-        toast.success(`Succesfully swept ${data.data.successful} users.`);
-        // Remove from local state
-        setFollowers((prev) =>
-          prev.filter((u) => !selectedSweepUsers.includes(u.login))
-        );
-        setFollowing((prev) =>
-          prev.filter((u) => !selectedSweepUsers.includes(u.login))
-        );
-        setSelectedSweepUsers([]);
-        setIsSweepMode(false);
-        // Stats will update on next refresh or manual trigger, but lists are clean now.
+    if (bulkAction === "follow") {
+      await runBulkFollow(finalTargets, `Bulk follow ${finalTargets.length} users`);
+    } else {
+      // Unfollow — per-request chunk is always the tier API cap
+      const API_CHUNK = plan === "PRO" ? 500 : 25;
+      const chunks: string[][] = [];
+      for (let i = 0; i < finalTargets.length; i += API_CHUNK) {
+        chunks.push(finalTargets.slice(i, i + API_CHUNK));
       }
-    } catch (e) {
-      console.error("Sweep error", e);
-      toast.error("Failed to sweep");
-    } finally {
-      setIsSweeping(false);
+      const taskId = `unfollow-${Date.now()}`;
+      addActivity({ id: taskId, label: `Bulk unfollow ${finalTargets.length} users`, status: "running", progress: { done: 0, total: finalTargets.length }, timestamp: Date.now() });
+      setBulkProgress({ done: 0, total: finalTargets.length });
+      let totalSucceeded = 0;
+      let totalFailed = 0;
+
+      for (let ci = 0; ci < chunks.length; ci++) {
+        const chunk = chunks[ci];
+        try {
+          const res = await fetch("/api/actions/bulk-unfollow", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ usernames: chunk }),
+          });
+          const data = await res.json();
+          if (data.success) {
+            totalSucceeded += data.succeeded ?? 0;
+            totalFailed += data.failed ?? 0;
+          } else {
+            toast.error(data.error || "Bulk unfollow failed");
+            updateActivity(taskId, { status: "error", result: data.error || "Failed" });
+            break;
+          }
+        } catch {
+          toast.error("Network error during bulk unfollow");
+          updateActivity(taskId, { status: "error", result: "Network error" });
+          break;
+        }
+        const done = Math.min((ci + 1) * API_CHUNK, finalTargets.length);
+        setBulkProgress({ done, total: finalTargets.length });
+        updateActivity(taskId, { progress: { done, total: finalTargets.length } });
+        if (ci < chunks.length - 1) await new Promise((r) => setTimeout(r, 600));
+      }
+      const removed = new Set(finalTargets);
+      setFollowing((prev) => prev.filter((u) => !removed.has(u.login)));
+      setFollowers((prev) => prev.filter((u) => !removed.has(u.login)));
+      const result = `✓ ${totalSucceeded} unfollowed${ totalFailed > 0 ? `, ${totalFailed} failed` : "" }`;
+      updateActivity(taskId, { status: "done", result, progress: undefined });
+      toast.success(`Done! Unfollowed ${totalSucceeded} users.${ totalFailed > 0 ? ` (${totalFailed} failed)` : "" }`);
+      setBulkProgress(null);
     }
+
+    setSelectedSweepUsers(new Set());
+    setIsSweepMode(false);
+    setIsSweeping(false);
   };
 
-  const toggleSweepSelection = (
-    login: string,
-    checked: boolean,
-    index?: number,
-    shiftKey?: boolean,
-    currentUsers: (
-      | GitHubUserSummary
-      | GitHubUserWithTimestamp
-    )[] = sortedPotentialUnfollows
-  ) => {
-    if (shiftKey && index !== undefined && lastSelectedIndex !== -1) {
-      // Range selection
-      const start = Math.min(lastSelectedIndex, index);
-      const end = Math.max(lastSelectedIndex, index);
-      const range = currentUsers.slice(start, end + 1).map((u) => u.login);
-
-      setSelectedSweepUsers((prev) => {
-        const newSet = new Set(prev);
-        if (checked) {
-          range.forEach((l) => newSet.add(l));
-        } else {
-          range.forEach((l) => newSet.delete(l));
-        }
-        return Array.from(newSet);
-      });
-    } else {
-      if (checked) {
-        setSelectedSweepUsers((prev) => [...prev, login]);
-      } else {
-        setSelectedSweepUsers((prev) => prev.filter((l) => l !== login));
-      }
-    }
-    if (index !== undefined) setLastSelectedIndex(index);
+  const toggleSweepSelection = (login: string) => {
+    setSelectedSweepUsers((prev) => {
+      const next = new Set(prev);
+      if (next.has(login)) next.delete(login);
+      else next.add(login);
+      return next;
+    });
   };
 
   const handleSelectAll = (
     currentUsers: (GitHubUserSummary | GitHubUserWithTimestamp)[]
   ) => {
-    if (getTierLimit(plan, "maxSweepCount") !== Infinity) return;
-
-    // Filter out whitelisted if needed
     const usersToSelect = excludeProtected
       ? currentUsers.filter((u) => !whitelist.includes(u.login))
       : currentUsers;
-
     const allLogins = usersToSelect.map((u) => u.login);
-
-    // If all that should be selected are already selected, clear selection.
-    // Otherwise, select missing ones.
-    const isAllSelected = allLogins.every((l) =>
-      selectedSweepUsers.includes(l)
-    );
-
+    const isAllSelected = allLogins.every((l) => selectedSweepUsers.has(l));
     if (isAllSelected) {
-      // Deselect only these ones
-      setSelectedSweepUsers((prev) =>
-        prev.filter((l) => !allLogins.includes(l))
-      );
+      setSelectedSweepUsers((prev) => {
+        const next = new Set(prev);
+        allLogins.forEach((l) => next.delete(l));
+        return next;
+      });
     } else {
       setSelectedSweepUsers((prev) => {
-        const newSet = new Set([...prev, ...allLogins]);
-        return Array.from(newSet);
+        const next = new Set(prev);
+        allLogins.forEach((l) => next.add(l));
+        return next;
       });
     }
   };
-
-  useEffect(() => {
-    setLastSelectedIndex(-1);
-  }, [sortDescending]);
 
   useEffect(() => {
     fetchAllData();
@@ -669,7 +728,7 @@ export function UserPageClient({ username }: UserPageClientProps) {
           onValueChange={setActiveTab}
         >
           <div className="flex flex-col md:flex-row justify-between items-center gap-4 mb-6 sticky top-0 bg-background/80 backdrop-blur-md z-10 py-4 border-b">
-            <TabsList className="grid grid-cols-2 md:grid-cols-4 w-full md:w-auto p-1 bg-muted/50">
+            <TabsList className="grid grid-cols-2 md:grid-cols-5 w-full md:w-auto p-1 bg-muted/50">
               <TabsTrigger
                 value="followers"
                 className="data-[state=active]:bg-background data-[state=active]:shadow-sm px-6"
@@ -693,6 +752,13 @@ export function UserPageClient({ username }: UserPageClientProps) {
                 className="data-[state=active]:bg-background data-[state=active]:shadow-sm px-6"
               >
                 Whitelist
+              </TabsTrigger>
+              <TabsTrigger
+                value="import"
+                className="data-[state=active]:bg-background data-[state=active]:shadow-sm px-6 gap-1.5"
+              >
+                <UserPlus className="w-3.5 h-3.5" />
+                Import
               </TabsTrigger>
             </TabsList>
 
@@ -723,7 +789,7 @@ export function UserPageClient({ username }: UserPageClientProps) {
                       className="mr-2 h-8 text-xs font-bold"
                     >
                       {sortedFollowers.every((u) =>
-                        selectedSweepUsers.includes(u.login)
+                        selectedSweepUsers.has(u.login)
                       )
                         ? "Deselect All"
                         : "Select All"}
@@ -739,8 +805,7 @@ export function UserPageClient({ username }: UserPageClientProps) {
                     onClick={() => {
                       if (activeTab !== "followers") setActiveTab("followers");
                       setIsSweepMode(!isSweepMode);
-                      setSelectedSweepUsers([]);
-                      setLastSelectedIndex(-1);
+                      setSelectedSweepUsers(new Set());
                     }}
                     className="rounded-xl font-bold h-9"
                   >
@@ -761,11 +826,11 @@ export function UserPageClient({ username }: UserPageClientProps) {
               onUnfollow={handleUnfollow}
               showFollowBackStatus={following}
               isFollowersTab={true}
-              selectionMode={isSweepMode && activeTab === "followers"}
-              selectedUsers={selectedSweepUsers}
-              onSelect={(l, c, i, s) =>
-                toggleSweepSelection(l, c, i, s, sortedFollowers)
-              }
+              selectable={isSweepMode && activeTab === "followers"}
+              selectedLogins={selectedSweepUsers}
+              onToggleSelection={toggleSweepSelection}
+              onSelectAll={() => handleSelectAll(sortedFollowers)}
+              onClearSelection={() => setSelectedSweepUsers(new Set())}
             />
           </TabsContent>
 
@@ -785,7 +850,7 @@ export function UserPageClient({ username }: UserPageClientProps) {
                       className="mr-2 h-8 text-xs font-bold"
                     >
                       {sortedFollowing.every((u) =>
-                        selectedSweepUsers.includes(u.login)
+                        selectedSweepUsers.has(u.login)
                       )
                         ? "Deselect All"
                         : "Select All"}
@@ -801,8 +866,7 @@ export function UserPageClient({ username }: UserPageClientProps) {
                     onClick={() => {
                       if (activeTab !== "following") setActiveTab("following");
                       setIsSweepMode(!isSweepMode);
-                      setSelectedSweepUsers([]);
-                      setLastSelectedIndex(-1);
+                      setSelectedSweepUsers(new Set());
                     }}
                     className="rounded-xl font-bold h-9"
                   >
@@ -822,11 +886,11 @@ export function UserPageClient({ username }: UserPageClientProps) {
               isLoading={loadingStates.following}
               unfollowingLogins={pendingUnfollows}
               onUnfollow={handleUnfollow}
-              selectionMode={isSweepMode && activeTab === "following"}
-              selectedUsers={selectedSweepUsers}
-              onSelect={(l, c, i, s) =>
-                toggleSweepSelection(l, c, i, s, sortedFollowing)
-              }
+              selectable={isSweepMode && activeTab === "following"}
+              selectedLogins={selectedSweepUsers}
+              onToggleSelection={toggleSweepSelection}
+              onSelectAll={() => handleSelectAll(sortedFollowing)}
+              onClearSelection={() => setSelectedSweepUsers(new Set())}
             />
           </TabsContent>
 
@@ -866,7 +930,7 @@ export function UserPageClient({ username }: UserPageClientProps) {
                               className="mr-2 h-8 text-xs font-bold"
                             >
                               {sortedPotentialUnfollows.every((u) =>
-                                selectedSweepUsers.includes(u.login)
+                                selectedSweepUsers.has(u.login)
                               )
                                 ? "Deselect All"
                                 : "Select All"}
@@ -883,8 +947,7 @@ export function UserPageClient({ username }: UserPageClientProps) {
                               if (activeTab !== "tracking")
                                 setActiveTab("tracking");
                               setIsSweepMode(!isSweepMode);
-                              setSelectedSweepUsers([]);
-                              setLastSelectedIndex(-1);
+                              setSelectedSweepUsers(new Set());
                             }}
                             className="rounded-xl font-bold h-9"
                           >
@@ -908,17 +971,11 @@ export function UserPageClient({ username }: UserPageClientProps) {
                         }
                         variant="danger"
                         unfollowingLogins={pendingUnfollows}
-                        selectionMode={isSweepMode && activeTab === "tracking"}
-                        selectedUsers={selectedSweepUsers}
-                        onSelect={(l, c, i, s) =>
-                          toggleSweepSelection(
-                            l,
-                            c,
-                            i,
-                            s,
-                            sortedPotentialUnfollows
-                          )
-                        }
+                        selectable={isSweepMode && activeTab === "tracking"}
+                        selectedLogins={selectedSweepUsers}
+                        onToggleSelection={toggleSweepSelection}
+                        onSelectAll={() => handleSelectAll(sortedPotentialUnfollows)}
+                        onClearSelection={() => setSelectedSweepUsers(new Set())}
                         onUnfollow={(login) => {
                           if (isWhitelisted(username, login)) {
                             toast.error(
@@ -1064,55 +1121,54 @@ export function UserPageClient({ username }: UserPageClientProps) {
               </Card>
             </div>
           </TabsContent>
+          <TabsContent value="import" className="m-0 space-y-6">
+            <div className="relative group">
+              <div className="absolute -inset-0.5 bg-linear-to-r from-violet-600 to-indigo-600 rounded-[2rem] blur opacity-10 group-hover:opacity-20 transition duration-1000" />
+              <div className="relative border-none shadow-2xl bg-white/80 dark:bg-zinc-950/80 backdrop-blur-3xl rounded-[2rem] overflow-hidden">
+                <div className="flex items-center gap-3 px-8 py-6 border-b border-zinc-500/10">
+                  <div className="p-2.5 bg-violet-600 rounded-xl shadow-lg">
+                    <UserPlus className="w-5 h-5 text-white" />
+                  </div>
+                  <div>
+                    <h2 className="text-2xl font-black tracking-tight">Follow Followers</h2>
+                    <p className="text-sm text-zinc-500 font-bold">Fetch any user&apos;s followers or following list and bulk-follow them</p>
+                  </div>
+                </div>
+                <div className="p-6">
+                  <TargetFollowerPanel
+                    onFollowSelected={handleImportFollow}
+                    isFollowing={isImportFollowing}
+                  />
+                </div>
+              </div>
+            </div>
+          </TabsContent>
         </Tabs>
 
         {isSweepMode && (
-          <div className="fixed bottom-0 left-0 right-0 z-[100] m-0 p-4 bg-background/95 backdrop-blur-md border-t border-border flex items-center justify-between animate-in fade-in slide-in-from-bottom-4 duration-200">
-            <div className="container mx-auto max-w-6xl flex justify-between items-center">
-              <div className="flex items-center gap-6">
-                <div className="text-sm font-bold">
-                  {selectedSweepUsers.length} Users Selected
-                  {plan === "FREE" && (
-                    <span className="ml-2 text-amber-500 font-bold opacity-70">
-                      (Max {getTierLimit(plan, "maxSweepCount")})
-                    </span>
-                  )}
-                </div>
-
-                <div className="h-4 w-[1px] bg-border" />
-
-                <div className="flex items-center space-x-2">
-                  <Checkbox
-                    id="exclude-protected"
-                    checked={excludeProtected}
-                    onCheckedChange={(checked: boolean | "indeterminate") =>
-                      setExcludeProtected(checked === true)
-                    }
-                  />
-                  <Label
-                    htmlFor="exclude-protected"
-                    className="text-xs font-black uppercase tracking-widest cursor-pointer opacity-70 hover:opacity-100 transition-opacity"
-                  >
-                    Ignore Shielded
-                  </Label>
-                </div>
-              </div>
-              <Button
-                variant="destructive"
-                disabled={selectedSweepUsers.length === 0 || isSweeping}
-                onClick={handleSweep}
-                className="rounded-xl font-bold px-8 shadow-lg shadow-red-500/20"
-              >
-                {isSweeping ? (
-                  <RefreshCw className="w-4 h-4 animate-spin mr-2" />
-                ) : (
-                  <Brush className="w-4 h-4 mr-2" />
-                )}
-                Execute Bulk Action
-              </Button>
-            </div>
-          </div>
+          <BulkActionBar
+            selectedCount={selectedSweepUsers.size}
+            plan={plan}
+            batchSize={batchSize}
+            onBatchSizeChange={setBatchSize}
+            bulkAction={bulkAction}
+            onBulkActionChange={setBulkAction}
+            excludeProtected={excludeProtected}
+            onExcludeProtectedChange={setExcludeProtected}
+            isProcessing={isSweeping}
+            progress={bulkProgress}
+            onExecute={handleBulkExecute}
+            onCancel={() => {
+              setIsSweepMode(false);
+              setSelectedSweepUsers(new Set());
+            }}
+          />
         )}
+
+        <ActivityFeed
+          entries={activityLog}
+          bottomOffset={isSweepMode ? 88 : 0}
+        />
 
         <footer className="mt-20 pb-12 text-center text-sm text-muted-foreground animate-in fade-in slide-in-from-bottom-4 duration-1000">
           <div className="flex flex-col items-center gap-3">

@@ -12,6 +12,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { Skeleton } from "@/components/ui/skeleton";
 import { GitHubUserWithTimestamp } from "@/lib/store";
 import { GitHubUserSummary } from "@/lib/types";
 import {
@@ -22,8 +23,6 @@ import {
   UserX,
 } from "lucide-react";
 
-import { Skeleton } from "@/components/ui/skeleton";
-
 interface UserGridProps {
   users: (GitHubUserSummary | GitHubUserWithTimestamp)[];
   onToggleWhitelist: (login: string) => void | Promise<void>;
@@ -33,15 +32,13 @@ interface UserGridProps {
   isLoading?: boolean;
   variant?: "default" | "danger";
   unfollowingLogins?: string[];
-  selectionMode?: boolean;
-  selectedUsers?: string[];
-  onSelect?: (
-    login: string,
-    checked: boolean,
-    index: number,
-    shiftKey: boolean
-  ) => void;
   isFollowersTab?: boolean;
+  // Bulk selection (Set-based for O(1) lookups)
+  selectable?: boolean;
+  selectedLogins?: Set<string>;
+  onToggleSelection?: (login: string) => void;
+  onSelectAll?: () => void;
+  onClearSelection?: () => void;
 }
 
 export function UserGrid({
@@ -53,10 +50,12 @@ export function UserGrid({
   isLoading,
   variant = "default",
   unfollowingLogins = [],
-  selectionMode = false,
-  selectedUsers = [],
-  onSelect,
   isFollowersTab = false,
+  selectable = false,
+  selectedLogins,
+  onToggleSelection,
+  onSelectAll,
+  onClearSelection,
 }: UserGridProps) {
   const [visibleCount, setVisibleCount] = useState(20);
   const [now] = useState(() => Date.now());
@@ -67,6 +66,11 @@ export function UserGrid({
 
   const visibleUsers = users.slice(0, visibleCount);
   const hasMore = visibleUsers.length < users.length;
+
+  const selectedCount = selectedLogins?.size ?? 0;
+  const allVisibleSelected =
+    visibleUsers.length > 0 &&
+    visibleUsers.every((u) => selectedLogins?.has(u.login));
 
   if (isLoading) {
     return (
@@ -110,15 +114,52 @@ export function UserGrid({
   }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-4">
+      {/* Selection toolbar */}
+      {selectable && (
+        <div className="flex items-center justify-between px-1 py-2">
+          <div className="flex items-center gap-3">
+            <Checkbox
+              id="select-all-visible"
+              checked={allVisibleSelected}
+              onCheckedChange={(checked) => {
+                if (checked) {
+                  onSelectAll?.();
+                } else {
+                  onClearSelection?.();
+                }
+              }}
+              className="h-5 w-5 rounded-md border-zinc-300 dark:border-zinc-600"
+            />
+            <label
+              htmlFor="select-all-visible"
+              className="text-sm font-bold text-zinc-500 cursor-pointer select-none"
+            >
+              {allVisibleSelected
+                ? `Deselect all (${visibleUsers.length})`
+                : `Select all visible (${visibleUsers.length})`}
+            </label>
+          </div>
+          {selectedCount > 0 && (
+            <Badge
+              variant="secondary"
+              className="bg-primary/10 text-primary border-none font-black text-xs px-3 py-1"
+            >
+              {selectedCount} selected
+            </Badge>
+          )}
+        </div>
+      )}
+
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {visibleUsers.map((user, index) => {
+        {visibleUsers.map((user) => {
           const isWl = whitelist.includes(user.login);
           const followsBack = showFollowBackStatus?.some(
             (f) => f.login === user.login
           );
           const hasFollowBackStatus = !!showFollowBackStatus;
           const isUnfollowing = unfollowingLogins.includes(user.login);
+          const isSelected = selectedLogins?.has(user.login) ?? false;
           const isNew =
             "firstSeenAt" in user && user.firstSeenAt
               ? user.firstSeenAt > now
@@ -127,25 +168,32 @@ export function UserGrid({
           return (
             <div
               key={user.login}
+              onClick={() => selectable && onToggleSelection?.(user.login)}
               className={`group relative flex items-center justify-between p-4 rounded-3xl backdrop-blur-xl border transition-all duration-300 ${
-                variant === "danger"
+                selectable ? "cursor-pointer" : ""
+              } ${
+                isSelected
+                  ? "border-primary/40 bg-primary/5 dark:bg-primary/10 shadow-md shadow-primary/10 ring-1 ring-primary/20"
+                  : variant === "danger"
                   ? "bg-red-500/5 dark:bg-red-950/20 border-red-500/10 hover:border-red-500/30 hover:bg-red-500/10 dark:hover:bg-red-900/40 hover:shadow-lg hover:shadow-red-500/10"
                   : "bg-white/60 dark:bg-zinc-900/60 border-zinc-500/10 hover:border-primary/20 hover:bg-white/80 dark:hover:bg-zinc-900/80 hover:shadow-lg"
               }`}
             >
-              <div className="flex items-center gap-4">
-                {selectionMode && onSelect && (
+              {/* Selection checkbox */}
+              {selectable && (
+                <div
+                  className="absolute top-3 left-3 z-10"
+                  onClick={(e) => e.stopPropagation()}
+                >
                   <Checkbox
-                    checked={selectedUsers.includes(user.login)}
-                    onCheckedChange={(checked) => {
-                      const shiftKey =
-                        (window.event as MouseEvent | undefined)?.shiftKey ||
-                        false;
-                      onSelect(user.login, checked as boolean, index, shiftKey);
-                    }}
-                    className="w-5 h-5 rounded-md border-zinc-500/30 data-[state=checked]:bg-primary data-[state=checked]:border-primary"
+                    checked={isSelected}
+                    onCheckedChange={() => onToggleSelection?.(user.login)}
+                    className="h-4 w-4 rounded border-zinc-300 dark:border-zinc-600"
                   />
-                )}
+                </div>
+              )}
+
+              <div className={`flex items-center gap-4 ${selectable ? "pl-6" : ""}`}>
                 <div className="relative">
                   <Avatar className="w-16 h-16 ring-4 ring-white dark:ring-zinc-950 shadow-xl transition-transform duration-300 group-hover:scale-105">
                     <AvatarImage src={user.avatar_url} />
@@ -165,6 +213,7 @@ export function UserGrid({
                     href={user.html_url}
                     target="_blank"
                     rel="noopener noreferrer"
+                    onClick={(e) => e.stopPropagation()}
                     className="font-black text-lg tracking-tight hover:text-primary transition-colors flex items-center gap-1.5"
                   >
                     @{user.login}
@@ -192,17 +241,19 @@ export function UserGrid({
                         {followsBack ? "Mutually Gaining" : "Non-Reciprocal"}
                       </Badge>
                     )}
+                    {isNew && (
+                      <Badge className="w-fit bg-emerald-500/10 text-emerald-600 border-none font-bold text-[9px] uppercase tracking-widest px-2 h-5">
+                        New
+                      </Badge>
+                    )}
                   </div>
-
-                  {isNew && (
-                    <Badge className="w-fit bg-emerald-500/10 text-emerald-600 border-none font-bold text-[9px] uppercase tracking-widest px-2 h-5">
-                      New
-                    </Badge>
-                  )}
                 </div>
               </div>
 
-              <div className="flex items-center gap-2 pl-2">
+              <div
+                className="flex items-center gap-2 pl-2"
+                onClick={(e) => e.stopPropagation()}
+              >
                 <TooltipProvider>
                   <Tooltip>
                     <TooltipTrigger asChild>
@@ -227,9 +278,7 @@ export function UserGrid({
                     </TooltipTrigger>
                     <TooltipContent>
                       <p className="font-bold">
-                        {isWl
-                          ? "Protected Connection"
-                          : "Shield this Connection"}
+                        {isWl ? "Protected Connection" : "Shield this Connection"}
                       </p>
                     </TooltipContent>
                   </Tooltip>
