@@ -5,6 +5,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { GitHubUserSummary } from "@/lib/types";
 import {
   AlertCircle,
@@ -21,6 +23,8 @@ import { toast } from "sonner";
 type ListType = "followers" | "following";
 
 interface TargetFollowerPanelProps {
+  /** Logins the logged-in user is already following */
+  followingLogins: Set<string>;
   /** Called when the user wants to follow the selected set of logins */
   onFollowSelected: (logins: string[]) => void;
   /** True while the parent is processing a bulk follow */
@@ -28,6 +32,7 @@ interface TargetFollowerPanelProps {
 }
 
 export function TargetFollowerPanel({
+  followingLogins,
   onFollowSelected,
   isFollowing,
 }: TargetFollowerPanelProps) {
@@ -40,6 +45,7 @@ export function TargetFollowerPanel({
   const [currentPage, setCurrentPage] = useState(1);
   const [error, setError] = useState<string | null>(null);
   const [searched, setSearched] = useState(false);
+  const [hideAlreadyFollowing, setHideAlreadyFollowing] = useState(false);
 
   const fetchPage = useCallback(
     async (username: string, type: ListType, page: number, append = false) => {
@@ -93,17 +99,24 @@ export function TargetFollowerPanel({
   }, [targetUsername, listType, currentPage, fetchPage]);
 
   const toggleUser = useCallback((login: string) => {
+    // Cannot toggle if already followed
+    if (followingLogins.has(login)) return;
+
     setSelectedLogins((prev) => {
       const next = new Set(prev);
       if (next.has(login)) next.delete(login);
       else next.add(login);
       return next;
     });
-  }, []);
+  }, [followingLogins]);
+
+  // Only select/deselect users we are NOT already following
+  const eligibleUsers = fetchedUsers.filter((u) => !followingLogins.has(u.login));
+  const visibleUsers = hideAlreadyFollowing ? eligibleUsers : fetchedUsers;
 
   const selectAll = useCallback(() => {
-    setSelectedLogins(new Set(fetchedUsers.map((u) => u.login)));
-  }, [fetchedUsers]);
+    setSelectedLogins(new Set(eligibleUsers.map((u) => u.login)));
+  }, [eligibleUsers]);
 
   const clearAll = useCallback(() => {
     setSelectedLogins(new Set());
@@ -115,8 +128,8 @@ export function TargetFollowerPanel({
   }, [selectedLogins, onFollowSelected]);
 
   const allSelected =
-    fetchedUsers.length > 0 &&
-    fetchedUsers.every((u) => selectedLogins.has(u.login));
+    eligibleUsers.length > 0 &&
+    eligibleUsers.every((u) => selectedLogins.has(u.login));
 
   return (
     <div className="space-y-6">
@@ -185,27 +198,46 @@ export function TargetFollowerPanel({
       {fetchedUsers.length > 0 && (
         <div className="space-y-3">
           {/* Toolbar */}
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <Checkbox
-                id="target-select-all"
-                checked={allSelected}
-                onCheckedChange={(c) => (c ? selectAll() : clearAll())}
-                className="h-4 w-4 rounded border-zinc-300 dark:border-zinc-600"
-              />
-              <label
-                htmlFor="target-select-all"
-                className="text-sm font-bold text-zinc-500 cursor-pointer select-none"
-              >
-                {allSelected
-                  ? `Deselect all (${fetchedUsers.length})`
-                  : `Select all (${fetchedUsers.length})`}
-              </label>
+          <div className="flex flex-wrap items-center justify-between gap-4 py-1 border-b border-border/30">
+            <div className="flex items-center gap-6">
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id="target-select-all"
+                  checked={allSelected}
+                  onCheckedChange={(c) => (c ? selectAll() : clearAll())}
+                  className="h-4 w-4 rounded border-zinc-300 dark:border-zinc-600"
+                  disabled={eligibleUsers.length === 0}
+                />
+                <label
+                  htmlFor="target-select-all"
+                  className="text-xs font-black text-muted-foreground uppercase tracking-widest cursor-pointer select-none"
+                >
+                  {allSelected
+                    ? `Deselect all (${eligibleUsers.length})`
+                    : `Select all (${eligibleUsers.length})`}
+                </label>
+              </div>
+
+              {/* Hide switch */}
+              <div className="flex items-center space-x-2">
+                <Switch
+                  id="hide-already-following"
+                  checked={hideAlreadyFollowing}
+                  onCheckedChange={setHideAlreadyFollowing}
+                />
+                <Label
+                  htmlFor="hide-already-following"
+                  className="text-xs font-black uppercase tracking-widest text-muted-foreground cursor-pointer"
+                >
+                  Hide already followed
+                </Label>
+              </div>
             </div>
+
             {selectedLogins.size > 0 && (
               <Badge
                 variant="secondary"
-                className="bg-primary/10 text-primary border-none font-black text-xs px-3 py-1"
+                className="bg-primary/10 text-primary border-none font-black text-xs px-3 py-1 animate-in zoom-in-95 duration-150"
               >
                 {selectedLogins.size} selected
               </Badge>
@@ -214,24 +246,34 @@ export function TargetFollowerPanel({
 
           {/* User list */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-[420px] overflow-y-auto pr-1">
-            {fetchedUsers.map((user) => {
+            {visibleUsers.map((user) => {
               const isSelected = selectedLogins.has(user.login);
+              const isAlreadyFollowed = followingLogins.has(user.login);
+
               return (
                 <div
                   key={user.login}
-                  onClick={() => toggleUser(user.login)}
-                  className={`group flex items-center gap-3 p-3 rounded-2xl border cursor-pointer transition-all duration-200 ${
-                    isSelected
-                      ? "border-primary/40 bg-primary/5 dark:bg-primary/10 ring-1 ring-primary/20"
-                      : "border-zinc-500/10 bg-white/60 dark:bg-zinc-900/60 hover:border-primary/20 hover:bg-white/80 dark:hover:bg-zinc-900/80"
+                  onClick={() => !isAlreadyFollowed && toggleUser(user.login)}
+                  className={`group flex items-center gap-3 p-3 rounded-2xl border transition-all duration-200 ${
+                    isAlreadyFollowed
+                      ? "border-emerald-500/10 bg-emerald-500/[0.02] dark:bg-emerald-500/[0.04] opacity-80 cursor-default"
+                      : isSelected
+                      ? "border-primary/40 bg-primary/5 dark:bg-primary/10 ring-1 ring-primary/20 cursor-pointer"
+                      : "border-zinc-500/10 bg-white/60 dark:bg-zinc-900/60 hover:border-primary/20 hover:bg-white/80 dark:hover:bg-zinc-900/80 cursor-pointer"
                   }`}
                 >
-                  <Checkbox
-                    checked={isSelected}
-                    onCheckedChange={() => toggleUser(user.login)}
-                    onClick={(e) => e.stopPropagation()}
-                    className="h-4 w-4 shrink-0 rounded border-zinc-300 dark:border-zinc-600"
-                  />
+                  {isAlreadyFollowed ? (
+                    <div className="h-4 w-4 shrink-0 flex items-center justify-center rounded bg-emerald-500/10 text-emerald-600">
+                      <UserCheck className="w-3 h-3" />
+                    </div>
+                  ) : (
+                    <Checkbox
+                      checked={isSelected}
+                      onCheckedChange={() => toggleUser(user.login)}
+                      onClick={(e) => e.stopPropagation()}
+                      className="h-4 w-4 shrink-0 rounded border-zinc-300 dark:border-zinc-600"
+                    />
+                  )}
                   <Avatar className="w-9 h-9 ring-2 ring-white dark:ring-zinc-950 shadow-sm shrink-0">
                     <AvatarImage src={user.avatar_url} />
                     <AvatarFallback className="text-sm font-black bg-zinc-100 dark:bg-zinc-800 text-zinc-500">
@@ -241,15 +283,22 @@ export function TargetFollowerPanel({
                   <span className="font-bold text-sm truncate flex-1">
                     @{user.login}
                   </span>
-                  <a
-                    href={user.html_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    onClick={(e) => e.stopPropagation()}
-                    className="shrink-0 opacity-0 group-hover:opacity-40 hover:!opacity-100 transition-opacity"
-                  >
-                    <ExternalLink className="w-3.5 h-3.5" />
-                  </a>
+                  
+                  {isAlreadyFollowed ? (
+                    <Badge className="bg-emerald-500/10 hover:bg-emerald-500/10 text-emerald-600 border-none font-black text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-lg">
+                      Following
+                    </Badge>
+                  ) : (
+                    <a
+                      href={user.html_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={(e) => e.stopPropagation()}
+                      className="shrink-0 opacity-0 group-hover:opacity-40 hover:!opacity-100 transition-opacity"
+                    >
+                      <ExternalLink className="w-3.5 h-3.5" />
+                    </a>
+                  )}
                 </div>
               );
             })}
