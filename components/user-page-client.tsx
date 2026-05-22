@@ -291,72 +291,160 @@ export function UserPageClient({ username }: UserPageClientProps) {
     [username, toggleWhitelist]
   );
 
-  // Activity log helpers
-  const addActivity = (entry: ActivityEntry) =>
-    setActivityLog((prev) => [entry, ...prev].slice(0, 20));
-  const updateActivity = (id: string, patch: Partial<ActivityEntry>) =>
-    setActivityLog((prev) =>
-      prev.map((e) => (e.id === id ? { ...e, ...patch } : e))
-    );
+  // Activity log helpers & persistence
+  const addActivity = useCallback((entry: ActivityEntry) => {
+    setActivityLog((prev) => {
+      const next = [entry, ...prev].slice(0, 20);
+      localStorage.setItem("gitstuff_activity_log", JSON.stringify(next));
+      return next;
+    });
+  }, []);
 
-  // Run bulk follow for a given list of logins (chunked, with progress)
-  const runBulkFollow = useCallback(async (logins: string[], label?: string) => {
-    // Per-request chunk size is always the tier API cap (safe rate-limit)
-    const API_CHUNK = plan === "PRO" ? 500 : 25;
-    const chunks: string[][] = [];
-    for (let i = 0; i < logins.length; i += API_CHUNK) {
-      chunks.push(logins.slice(i, i + API_CHUNK));
-    }
-    const taskId = `follow-${Date.now()}`;
-    const taskLabel = label ?? `Follow ${logins.length} users`;
-    addActivity({ id: taskId, label: taskLabel, status: "running", progress: { done: 0, total: logins.length }, timestamp: Date.now() });
-    setBulkProgress({ done: 0, total: logins.length });
-    let totalSucceeded = 0;
-    let totalFailed = 0;
+  const updateActivity = useCallback((id: string, patch: Partial<ActivityEntry>) => {
+    setActivityLog((prev) => {
+      const next = prev.map((e) => (e.id === id ? { ...e, ...patch } : e));
+      localStorage.setItem("gitstuff_activity_log", JSON.stringify(next));
+      return next;
+    });
+  }, []);
 
-    for (let ci = 0; ci < chunks.length; ci++) {
-      const chunk = chunks[ci];
+  // Persistent Queue Structure
+  interface StoredQueue {
+    id: string;
+    label: string;
+    action: "follow" | "unfollow";
+    pendingLogins: string[];
+    totalCount: number;
+    succeededCount: number;
+    failedCount: number;
+  }
+
+  // Sequential queue executor (fully resumeable)
+  const processQueue = useCallback(async (queue: StoredQueue) => {
+    setIsSweeping(true);
+    setBulkProgress({ done: queue.totalCount - queue.pendingLogins.length, total: queue.totalCount });
+
+    let activePending = [...queue.pendingLogins];
+    let succeeded = queue.succeededCount;
+    let failed = queue.failedCount;
+
+    while (activePending.length > 0) {
+      const target = activePending[0];
+      const endpoint = queue.action === "follow" ? "/api/actions/follow" : "/api/actions/unfollow";
+
       try {
-        const res = await fetch("/api/actions/bulk-follow", {
+        const res = await fetch(endpoint, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ usernames: chunk }),
+          body: JSON.stringify({ targetUsername: target }),
         });
         const data = await res.json();
-        if (data.success) {
-          totalSucceeded += data.succeeded ?? 0;
-          totalFailed += data.failed ?? 0;
+        if (res.ok && data.success) {
+          succeeded++;
+          // Update local state instantly if it's an unfollow
+          if (queue.action === "unfollow") {
+            setFollowing((prev) => prev.filter((u) => u.login !== target));
+            setFollowers((prev) => prev.filter((u) => u.login !== target));
+          }
         } else {
-          toast.error(data.error || "Bulk follow failed");
-          updateActivity(taskId, { status: "error", result: data.error || "Failed" });
-          break;
+          failed++;
         }
       } catch {
-        toast.error("Network error during bulk follow");
-        updateActivity(taskId, { status: "error", result: "Network error" });
-        break;
+        failed++;
       }
-      const done = Math.min((ci + 1) * API_CHUNK, logins.length);
-      setBulkProgress({ done, total: logins.length });
-      updateActivity(taskId, { progress: { done, total: logins.length } });
-      if (ci < chunks.length - 1) await new Promise((r) => setTimeout(r, 600));
+
+      // Shift processed item
+      activePending.shift();
+      const doneCount = queue.totalCount - activePending.length;
+
+      // Update progress UI
+      setBulkProgress({ done: doneCount, total: queue.totalCount });
+      updateActivity(queue.id, { progress: { done: doneCount, total: queue.totalCount } });
+
+      // Persist active queue progress
+      if (activePending.length > 0) {
+        const updatedQueue: StoredQueue = {
+          ...queue,
+          pendingLogins: activePending,
+          succeededCount: succeeded,
+          failedCount: failed,
+        };
+        localStorage.setItem("gitstuff_active_queue", JSON.stringify(updatedQueue));
+        // Safe inter-request delay (300ms)
+        await new Promise((r) => setTimeout(r, 300));
+      } else {
+        localStorage.removeItem("gitstuff_active_queue");
+      }
     }
-    const result = `✓ ${totalSucceeded} followed${ totalFailed > 0 ? `, ${totalFailed} failed` : "" }`;
-    updateActivity(taskId, { status: "done", result, progress: undefined });
-    toast.success(`Done! Followed ${totalSucceeded} users.${ totalFailed > 0 ? ` (${totalFailed} failed)` : "" }`);
+
+    const result = `✓ ${succeeded} done${failed > 0 ? `, ${failed} failed` : ""}`;
+    updateActivity(queue.id, { status: "done", result, progress: undefined });
+    toast.success(`Bulk ${queue.action} complete! ${result}`);
+
     setBulkProgress(null);
-  }, [plan, addActivity, updateActivity]);
+    setIsSweeping(false);
+    // Force refresh / sync from GitHub to local DB
+    fetchAllData(true);
+  }, [fetchAllData, addActivity, updateActivity]);
+
+  // Load persistence & Auto-Resume on Mount
+  useEffect(() => {
+    // 1. Restore activity logs
+    const savedLogs = localStorage.getItem("gitstuff_activity_log");
+    if (savedLogs) {
+      try {
+        setActivityLog(JSON.parse(savedLogs));
+      } catch (e) {
+        console.error("Failed to parse saved activity logs", e);
+      }
+    }
+
+    // 2. Restore and Auto-resume active queue if any
+    const savedQueue = localStorage.getItem("gitstuff_active_queue");
+    if (savedQueue) {
+      try {
+        const parsedQueue = JSON.parse(savedQueue) as StoredQueue;
+        if (parsedQueue.pendingLogins && parsedQueue.pendingLogins.length > 0) {
+          toast.info(`Resuming background bulk ${parsedQueue.action}…`);
+          processQueue(parsedQueue);
+        }
+      } catch (e) {
+        console.error("Failed to resume active queue", e);
+      }
+    }
+  }, [processQueue]);
 
   const handleImportFollow = useCallback(async (logins: string[]) => {
     setIsImportFollowing(true);
-    await runBulkFollow(logins, `Import: follow ${logins.length} users`);
+    const taskId = `follow-${Date.now()}`;
+    const taskLabel = `Import: follow ${logins.length} users`;
+
+    addActivity({
+      id: taskId,
+      label: taskLabel,
+      status: "running",
+      progress: { done: 0, total: logins.length },
+      timestamp: Date.now(),
+    });
+
+    const newQueue: StoredQueue = {
+      id: taskId,
+      label: taskLabel,
+      action: "follow",
+      pendingLogins: logins,
+      totalCount: logins.length,
+      succeededCount: 0,
+      failedCount: 0,
+    };
+
+    localStorage.setItem("gitstuff_active_queue", JSON.stringify(newQueue));
+    await processQueue(newQueue);
     setIsImportFollowing(false);
-  }, [runBulkFollow]);
+  }, [addActivity, processQueue]);
 
   const handleBulkExecute = async () => {
     if (selectedSweepUsers.size === 0) return;
     const allSelected = Array.from(selectedSweepUsers);
-    // batchSize 0 = run all; otherwise take first N
     const sliced = batchSize === 0 ? allSelected : allSelected.slice(0, batchSize);
     const finalTargets = excludeProtected
       ? sliced.filter((login) => !whitelist.includes(login))
@@ -367,62 +455,32 @@ export function UserPageClient({ username }: UserPageClientProps) {
       return;
     }
 
-    setIsSweeping(true);
+    const taskId = `${bulkAction}-${Date.now()}`;
+    const taskLabel = `Bulk ${bulkAction} ${finalTargets.length} users`;
 
-    if (bulkAction === "follow") {
-      await runBulkFollow(finalTargets, `Bulk follow ${finalTargets.length} users`);
-    } else {
-      // Unfollow — per-request chunk is always the tier API cap
-      const API_CHUNK = plan === "PRO" ? 500 : 25;
-      const chunks: string[][] = [];
-      for (let i = 0; i < finalTargets.length; i += API_CHUNK) {
-        chunks.push(finalTargets.slice(i, i + API_CHUNK));
-      }
-      const taskId = `unfollow-${Date.now()}`;
-      addActivity({ id: taskId, label: `Bulk unfollow ${finalTargets.length} users`, status: "running", progress: { done: 0, total: finalTargets.length }, timestamp: Date.now() });
-      setBulkProgress({ done: 0, total: finalTargets.length });
-      let totalSucceeded = 0;
-      let totalFailed = 0;
+    addActivity({
+      id: taskId,
+      label: taskLabel,
+      status: "running",
+      progress: { done: 0, total: finalTargets.length },
+      timestamp: Date.now(),
+    });
 
-      for (let ci = 0; ci < chunks.length; ci++) {
-        const chunk = chunks[ci];
-        try {
-          const res = await fetch("/api/actions/bulk-unfollow", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ usernames: chunk }),
-          });
-          const data = await res.json();
-          if (data.success) {
-            totalSucceeded += data.succeeded ?? 0;
-            totalFailed += data.failed ?? 0;
-          } else {
-            toast.error(data.error || "Bulk unfollow failed");
-            updateActivity(taskId, { status: "error", result: data.error || "Failed" });
-            break;
-          }
-        } catch {
-          toast.error("Network error during bulk unfollow");
-          updateActivity(taskId, { status: "error", result: "Network error" });
-          break;
-        }
-        const done = Math.min((ci + 1) * API_CHUNK, finalTargets.length);
-        setBulkProgress({ done, total: finalTargets.length });
-        updateActivity(taskId, { progress: { done, total: finalTargets.length } });
-        if (ci < chunks.length - 1) await new Promise((r) => setTimeout(r, 600));
-      }
-      const removed = new Set(finalTargets);
-      setFollowing((prev) => prev.filter((u) => !removed.has(u.login)));
-      setFollowers((prev) => prev.filter((u) => !removed.has(u.login)));
-      const result = `✓ ${totalSucceeded} unfollowed${ totalFailed > 0 ? `, ${totalFailed} failed` : "" }`;
-      updateActivity(taskId, { status: "done", result, progress: undefined });
-      toast.success(`Done! Unfollowed ${totalSucceeded} users.${ totalFailed > 0 ? ` (${totalFailed} failed)` : "" }`);
-      setBulkProgress(null);
-    }
+    const newQueue: StoredQueue = {
+      id: taskId,
+      label: taskLabel,
+      action: bulkAction,
+      pendingLogins: finalTargets,
+      totalCount: finalTargets.length,
+      succeededCount: 0,
+      failedCount: 0,
+    };
 
+    localStorage.setItem("gitstuff_active_queue", JSON.stringify(newQueue));
     setSelectedSweepUsers(new Set());
     setIsSweepMode(false);
-    setIsSweeping(false);
+
+    await processQueue(newQueue);
   };
 
   const toggleSweepSelection = (login: string) => {
@@ -1136,6 +1194,7 @@ export function UserPageClient({ username }: UserPageClientProps) {
                 </div>
                 <div className="p-6">
                   <TargetFollowerPanel
+                    followingLogins={new Set(following.map((u) => u.login))}
                     onFollowSelected={handleImportFollow}
                     isFollowing={isImportFollowing}
                   />
