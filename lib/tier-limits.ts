@@ -8,6 +8,7 @@ export const TIER_LIMITS = {
     priorityRefresh: false,
     maxSweepCount: 5,
     sweepAutomation: false,
+    maxBulkFollow: 25,
   },
   PRO: {
     maxWhitelist: Infinity,
@@ -16,6 +17,7 @@ export const TIER_LIMITS = {
     priorityRefresh: true,
     maxSweepCount: Infinity,
     sweepAutomation: true,
+    maxBulkFollow: 500,
   },
 } as const;
 
