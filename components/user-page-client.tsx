@@ -324,7 +324,7 @@ export function UserPageClient({ username }: UserPageClientProps) {
     setIsSweeping(true);
     setBulkProgress({ done: queue.totalCount - queue.pendingLogins.length, total: queue.totalCount });
 
-    let activePending = [...queue.pendingLogins];
+    const activePending = [...queue.pendingLogins];
     let succeeded = queue.succeededCount;
     let failed = queue.failedCount;
 
@@ -662,7 +662,7 @@ export function UserPageClient({ username }: UserPageClientProps) {
   }
 
   return (
-    <div className="min-h-screen bg-background p-4 md:p-8">
+    <div className={`min-h-screen bg-background p-4 md:p-8 transition-all duration-300 ${isSweepMode ? "pb-36" : ""}`}>
       <div className="max-w-6xl mx-auto space-y-8">
         <div className="flex justify-end mb-4 gap-2">
           <Button
@@ -1226,7 +1226,7 @@ export function UserPageClient({ username }: UserPageClientProps) {
 
         <ActivityFeed
           entries={activityLog}
-          bottomOffset={isSweepMode ? 88 : 0}
+          bottomOffset={isSweepMode ? 100 : 0}
         />
 
         <footer className="mt-20 pb-12 text-center text-sm text-muted-foreground animate-in fade-in slide-in-from-bottom-4 duration-1000">
