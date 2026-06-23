@@ -1,5 +1,11 @@
 packages:
   - .
+allowBuilds:
+  '@prisma/engines': false
+  esbuild: false
+  prisma: true
+  sharp: false
+  unrs-resolver: false
 ignoredBuiltDependencies:
   - sharp
   - unrs-resolver
